@@ -1,3 +1,24 @@
+
+import fs from 'fs';
+import path from 'path';
+
+function renderSpaRedirects() {
+  return {
+    name: 'render-spa-redirects',
+    closeBundle() {
+      const distDir = path.resolve(__dirname, 'dist');
+      const distIndex = path.join(distDir, 'index.html');
+      const dist404 = path.join(distDir, '404.html');
+      const distRedirects = path.join(distDir, '_redirects');
+
+      if (fs.existsSync(distIndex)) {
+        fs.copyFileSync(distIndex, dist404);
+      }
+      fs.writeFileSync(distRedirects, '/* /index.html 200\n', 'utf8');
+    }
+  };
+}
+
 // vite.config.ts
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import devServer, { defaultOptions } from '@hono/vite-dev-server';
@@ -78,7 +99,7 @@ function cdnPrefixImages(): Plugin {
     code.replace(/url\((['"]?)([^'")]+)\1\)/g, (_m, q, p) => `url(${q}${toCDN(p, cdn)}${q})`);
 
   const rewriteJsxAst = (code: string, id: string, cdn: string) => {
-    const ast = parse(code, { sourceType: 'module', plugins: ['typescript', 'jsx'] });
+    const ast = parse(code, { sourceType: 'module', plugins: [renderSpaRedirects(), 'typescript', 'jsx'] });
     let rewrites = 0;
 
     traverse(ast, {
