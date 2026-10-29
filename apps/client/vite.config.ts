@@ -1,25 +1,4 @@
-
-import fs from 'fs';
-import path from 'path';
-
-function renderSpaRedirects() {
-  return {
-    name: 'render-spa-redirects',
-    closeBundle() {
-      const distDir = path.resolve(__dirname, 'dist');
-      const distIndex = path.join(distDir, 'index.html');
-      const dist404 = path.join(distDir, '404.html');
-      const distRedirects = path.join(distDir, '_redirects');
-
-      if (fs.existsSync(distIndex)) {
-        fs.copyFileSync(distIndex, dist404);
-      }
-      fs.writeFileSync(distRedirects, '/* /index.html 200\n', 'utf8');
-    }
-  };
-}
-
-// vite.config.ts
+﻿// vite.config.ts
 import { defineConfig, loadEnv, type Plugin } from 'vite';
 import devServer, { defaultOptions } from '@hono/vite-dev-server';
 import react from '@vitejs/plugin-react-oxc';
@@ -58,7 +37,7 @@ function cdnPrefixImages(): Plugin {
     while (s.startsWith('../')) s = s.slice(3);
     if (s.startsWith('/')) s = s.slice(1);
     // ensure it starts with images/
-    if (!s.startsWith('images/')) return p; // not under images → leave as is
+    if (!s.startsWith('images/')) return p; // not under images â†’ leave as is
     return '/' + s; // canonical: '/images/...'
   };
 
@@ -155,7 +134,7 @@ function cdnPrefixImages(): Plugin {
 
     if (!rewrites) return null;
     const out = generate(ast, { retainLines: true, sourceMaps: false }, code).code;
-    if (DEBUG) console.log(`[cdn] ${id} → ${rewrites} rewrites`);
+    if (DEBUG) console.log(`[cdn] ${id} â†’ ${rewrites} rewrites`);
     return out;
   };
 
