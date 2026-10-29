@@ -1,23 +1,13 @@
-import { spawnSync } from "node:child_process";
+import fs from 'fs';
+import path from 'path';
 
-const steps = [
-  ["sitemap-routes", ["node", "scripts/generate-sitemap-routes.mjs"]],
-  ["prerender", ["node", "scripts/prerender.mjs"]],
-];
+const distIndex = path.resolve('apps/client/dist/index.html');
+const dist404 = path.resolve('apps/client/dist/404.html');
+const distRedirects = path.resolve('apps/client/dist/_redirects');
 
-for (const [name, command] of steps) {
-  const [bin, ...args] = command;
-  const result = spawnSync(bin, args, {
-    stdio: "inherit",
-    env: {
-      ...process.env,
-      NODE_ENV: "production",
-    },
-  });
-
-  if (result.status !== 0) {
-    const exitCode = result.status ?? "unknown";
-    console.warn(`[postbuild] ${name} skipped or failed with exit code ${exitCode}`);
-    break;
-  }
+if (fs.existsSync(distIndex)) {
+  fs.copyFileSync(distIndex, dist404);
+}
+if (!fs.existsSync(distRedirects)) {
+  fs.writeFileSync(distRedirects, '/* /index.html 200\n', 'utf8');
 }
