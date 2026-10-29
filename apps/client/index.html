@@ -1,51 +1,10 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
   <head>
-
-    <script id="debug-error-catcher">
-      window.addEventListener('error', function(e) {
-        var r = document.getElementById('root');
-        if (r) {
-          r.innerHTML = '<div style="padding:20px;color:#721c24;background:#f8d7da;border:1px solid #f5c6cb;margin:20px;border-radius:8px;font-family:sans-serif;"><h3>Erro na Aplicação:</h3><p><b>' + (e.message || 'Erro desconhecido') + '</b></p><p><small>' + (e.filename || '') + ':' + (e.lineno || '') + '</small></p></div>';
-        }
-      });
-      window.addEventListener('unhandledrejection', function(e) {
-        var r = document.getElementById('root');
-        if (r) {
-          r.innerHTML = '<div style="padding:20px;color:#721c24;background:#f8d7da;border:1px solid #f5c6cb;margin:20px;border-radius:8px;font-family:sans-serif;"><h3>Erro na Requisição/API:</h3><p><b>' + (e.reason && e.reason.message ? e.reason.message : e.reason) + '</b></p></div>';
-        }
-      });
-    </script>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Nail Designer Leticia | Manicure e pedicure em Nova Tramandaí</title>
-    <meta name="description" content="Manicure, pedicure, esmaltação em gel, banho de gel e manutenção com Leticia Borges em Nova Tramandaí." />
-    <meta name="author" content="Leticia Borges" />
-    <meta name="robots" content="index,follow" />
-
-    <meta property="og:title" content="Nail Designer Leticia | Nova Tramandaí" />
-    <meta property="og:description" content="Unhas cuidadas, presença marcante. Agende seu horário pelo WhatsApp." />
-    <meta property="og:type" content="website" />
-    <meta property="og:image" content="/assets/slots/home.hero.jpg" />
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="Nail Designer Leticia | Nova Tramandaí" />
-    <meta name="twitter:description" content="Manicure e pedicure com cuidado em cada detalhe." />
-    <meta name="twitter:image" content="/assets/slots/home.hero.jpg" />
-    <script id="structured-data-jsonld" type="application/ld+json">
-      {
-        "@context": "https://schema.org",
-        "@type": "LocalBusiness",
-        "name": "Nail Designer Leticia",
-        "description": "Manicure, pedicure, esmaltação em gel, banho de gel e manutenção em Nova Tramandaí.",
-        "telephone": "+55 51 99890-1388",
-        "areaServed": "Nova Tramandaí",
-        "sameAs": ["https://www.instagram.com/naildesigner.lleticia/"],
-        "url": "__SITE_URL__"
-      }
-    </script>
-    <script src="/app-config.js"></script>
+    <title>Agendamento</title>
   </head>
-
   <body>
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
