@@ -1,0 +1,94 @@
+import { Camera, MessageCircle, Sparkles } from "lucide-react";
+import { NavLink, Link, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+import type { ReactNode } from "react";
+import { whatsappLink } from "./siteData";
+
+type SiteLayoutProps = {
+  children: ReactNode;
+  title: string;
+  description: string;
+};
+
+const navItems = [
+  { to: "/", label: "Início" },
+  { to: "/servicos", label: "Serviços" },
+  { to: "/agenda", label: "Agenda" },
+  { to: "/contato", label: "Contato" },
+];
+
+function usePageMeta(title: string, description: string) {
+  const location = useLocation();
+
+  useEffect(() => {
+    document.title = title;
+    const descriptionTag = document.querySelector('meta[name="description"]');
+    if (descriptionTag) descriptionTag.setAttribute("content", description);
+    const ogTitle = document.querySelector('meta[property="og:title"]');
+    if (ogTitle) ogTitle.setAttribute("content", title);
+    const ogDescription = document.querySelector('meta[property="og:description"]');
+    if (ogDescription) ogDescription.setAttribute("content", description);
+    const twitterTitle = document.querySelector('meta[name="twitter:title"]');
+    if (twitterTitle) twitterTitle.setAttribute("content", title);
+    const twitterDescription = document.querySelector('meta[name="twitter:description"]');
+    if (twitterDescription) twitterDescription.setAttribute("content", description);
+  }, [description, location.pathname, title]);
+}
+
+export default function SiteLayout({ children, title, description }: SiteLayoutProps) {
+  usePageMeta(title, description);
+
+  return (
+    <div className="site-shell">
+      <header className="site-header">
+        <div className="section-shell header-inner">
+          <Link className="brand-lockup" to="/" aria-label="Nail Designer Leticia, início">
+            <span className="brand-mark"><Sparkles size={15} /></span>
+            <span><strong>Leticia</strong><em>nail designer</em></span>
+          </Link>
+          <nav className="desktop-nav" aria-label="Navegação principal">
+            {navItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === "/"}
+                className={({ isActive }: { isActive: boolean }) => isActive ? "nav-link is-active" : "nav-link"}
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
+          <a className="header-cta" href={whatsappLink("Olá, Leticia! Gostaria de agendar um horário.")} target="_blank" rel="noreferrer">
+            <MessageCircle size={16} />
+            WhatsApp
+          </a>
+        </div>
+      </header>
+
+      {children}
+
+      <footer className="site-footer">
+        <div className="section-shell footer-grid">
+          <div>
+            <Link className="brand-lockup footer-brand" to="/">
+              <span className="brand-mark"><Sparkles size={15} /></span>
+              <span><strong>Leticia</strong><em>nail designer</em></span>
+            </Link>
+            <p className="footer-note">Manicure, pedicure e gel com cuidado em Nova Tramandaí.</p>
+          </div>
+          <div className="footer-links">
+            <Link to="/servicos">Serviços</Link>
+            <Link to="/agenda">Agenda</Link>
+            <Link to="/contato">Contato</Link>
+            <a href="https://www.instagram.com/naildesigner.lleticia/" target="_blank" rel="noreferrer"><Camera size={15} /> Instagram</a>
+          </div>
+          <div className="footer-contact">
+            <span>Agendamentos</span>
+            <a href={whatsappLink("Olá, Leticia! Gostaria de agendar um horário.")} target="_blank" rel="noreferrer">(51) 99890-1388</a>
+          </div>
+        </div>
+        <div className="section-shell footer-bottom"><span>© 2026 Leticia Borges</span><span>Nova Tramandaí · RS</span></div>
+      </footer>
+    </div>
+  );
+}
