@@ -70,4 +70,8 @@ A publicação deve seguir esta ordem: branch -> Pull Request -> verificações 
 
 ## Estado
 
+- Rotas administrativas de pré-visualização de plano (`POST /api/ai/plans/preview`) e assinatura de aprovação (`POST /api/ai/plans/approve`) adicionadas. O hash SHA-256 vincula título, resumo, operações/caminhos, riscos e verificações; o token HMAC é vinculado ao ID da administradora e expira em 10 minutos.
+- Rota de execução (`POST /api/ai/plans/execute`) responde deliberadamente `503 EDITOR_NOT_CONFIGURED`: ainda não verifica/consome o token nem escreve no GitHub. Não ligar esta rota até implementar verificação de assinatura, expiração, plano imutável, prevenção de replay, allowlist de ficheiros, credencial GitHub e testes completos.
+- Testes de autorização anónima/cliente foram adicionados para as três rotas; ainda não foram executados.
+
 Este documento define o contrato de produto e segurança. O chat administrativo usa a rota `/api/ai` protegida por `adminRoute`, mas a interface permanece explicitamente em modo consulta/planeamento. As rotas funcionais de planeamento/aprovação/execução e a interface de aprovação ainda não foram implementadas. O editor não está activo. A execução real ainda depende da implementação, de testes executados com sucesso, da configuração de credenciais GitHub no ambiente privado do backend e da confirmação da integração Cloudflare Pages/Render. Não considerar o editor activo nem publicar até todos os critérios de aceitação passarem.
