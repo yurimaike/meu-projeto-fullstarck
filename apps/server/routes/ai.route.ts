@@ -1,7 +1,9 @@
-﻿import { Hono, type Context } from "hono";
+﻿import { createHash, createHmac, timingSafeEqual } from "node:crypto";
+import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
 import { adminRoute } from "../_core/route-helpers";
+import { env } from "../_core/env";
 import { bodySizeLimit } from "../middlewares/body-size-limit";
 import { distributedRateLimit, identityRateLimitCounter } from "../middlewares/distributed-rate-limit";
 import {
@@ -53,6 +55,47 @@ const ImageRequestSchema = z.object({
   n: z.literal(1).optional().default(1),
   size: z.string().trim().regex(/^\d{2,5}x\d{2,5}$/).optional().default("1024x1024")
 });
+
+
+const EditPlanSchema = z.object({
+  title: z.string().trim().min(1).max(160),
+  summary: z.string().trim().min(1).max(2000),
+  files: z.array(z.object({
+    path: z.string().trim().min(1).max(240),
+    operation: z.enum(["create", "update", "delete"]),
+    reason: z.string().trim().min(1).max(500)
+  }).strict()).min(1).max(12),
+  risks: z.array(z.string().trim().min(1).max(500)).max(12),
+  checks: z.array(z.string().trim().min(1).max(300)).max(12)
+}).strict();
+
+function canonicalPlan(plan: z.infer<typeof EditPlanSchema>) {
+  return JSON.stringify({
+    title: plan.title,
+    summary: plan.summary,
+    files: [...plan.files].sort((a, b) => a.path.localeCompare(b.path)),
+    risks: [...plan.risks].sort(),
+    checks: [...plan.checks].sort()
+  });
+}
+
+function planDigest(plan: z.infer<typeof EditPlanSchema>) {
+  return createHash("sha256").update(canonicalPlan(plan)).digest("hex");
+}
+
+function approvalSecret() {
+  if (env.NODE_ENV === "production" && env.BETTER_AUTH_SECRET === "dev-only-better-auth-secret-change-before-production") {
+    throw new Error("Approval signing secret is not configured");
+  }
+  return env.BETTER_AUTH_SECRET;
+}
+
+function issuePlanApproval(userId: string, digest: string) {
+  const expiresAt = Date.now() + 10 * 60 * 1000;
+  const payload = Buffer.from(JSON.stringify({ sub: userId, digest, exp: expiresAt })).toString("base64url");
+  const signature = createHmac("sha256", approvalSecret()).update(payload).digest("base64url");
+  return { approval_token: payload + "." + signature, expires_at: new Date(expiresAt).toISOString() };
+}
 
 export const aiRouter = new Hono();
 const aiChatRateLimit = distributedRateLimit((c) => [
@@ -132,6 +175,40 @@ const imageHandler = async (c: Context) => {
   }
 };
 
+
+const planPreviewHandler = async (c: Context) => {
+  const parsed = EditPlanSchema.safeParse(requestBody(c));
+  if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Invalid edit plan"), 400);
+  const paths = parsed.data.files.map((file) => file.path);
+  if (new Set(paths).size !== paths.length) {
+    return c.json(apiFailure("INVALID_INPUT", "Duplicate file paths are not allowed"), 400);
+  }
+  return c.json(apiSuccess({ plan: parsed.data, plan_hash: planDigest(parsed.data), approval_required: true }), 200);
+};
+
+const planApprovalHandler = async (c: Context) => {
+  const parsed = z.object({
+    plan: EditPlanSchema,
+    plan_hash: z.string().regex(/^[a-f0-9]{64}$/)
+  }).strict().safeParse(requestBody(c));
+  if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Invalid approval request"), 400);
+  if (planDigest(parsed.data.plan) !== parsed.data.plan_hash) {
+    return c.json(apiFailure("PLAN_CHANGED", "The plan changed; review it again before approving"), 409);
+  }
+  try {
+    return c.json(apiSuccess(issuePlanApproval(c.var.currentUser.id, parsed.data.plan_hash)), 200);
+  } catch {
+    return c.json(apiFailure("APPROVAL_UNAVAILABLE", "Secure approval signing is not configured"), 503);
+  }
+};
+
+const executePlanHandler = async (c: Context) => {
+  return c.json(apiFailure("EDITOR_NOT_CONFIGURED", "GitHub execution is disabled until a dedicated server-side GitHub integration is configured and tested"), 503);
+};
+
+aiRouter.post("/plans/preview", adminRoute, bodySizeLimit, planPreviewHandler);
+aiRouter.post("/plans/approve", adminRoute, bodySizeLimit, planApprovalHandler);
+aiRouter.post("/plans/execute", adminRoute, bodySizeLimit, executePlanHandler);
 aiRouter.post("", adminRoute, aiChatRateLimit, bodySizeLimit, chatHandler);
 aiRouter.post("/", adminRoute, aiChatRateLimit, bodySizeLimit, chatHandler);
 aiRouter.post("/images", adminRoute, aiImageRateLimit, bodySizeLimit, imageHandler);
