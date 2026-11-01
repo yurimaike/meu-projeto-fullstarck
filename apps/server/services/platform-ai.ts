@@ -91,12 +91,11 @@ async function requestGemini(input: PlatformAIChatInput, stream: boolean) {
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
   } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
+    // Avoid logging exception messages because network errors can contain request details.
     console.error("[PlatformAI] Gemini network request failed", {
       model: GEMINI_MODEL,
       stream,
-      errorName: error instanceof Error ? error.name : "UnknownError",
-      detail: detail.slice(0, 1000)
+      errorName: error instanceof Error ? error.name : "UnknownError"
     });
     throw new PlatformAIError(
       "PLATFORM_AI_REQUEST_FAILED",
@@ -223,8 +222,7 @@ export async function requestPlatformAIChatStream(input: PlatformAIChatInput) {
       } catch (error) {
         console.error("[PlatformAI] Gemini stream interrupted", {
           model: GEMINI_MODEL,
-          errorName: error instanceof Error ? error.name : "UnknownError",
-          detail: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500)
+          errorName: error instanceof Error ? error.name : "UnknownError"
         });
         controller.error(error);
       } finally {
