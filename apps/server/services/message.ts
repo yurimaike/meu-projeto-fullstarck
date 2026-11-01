@@ -107,6 +107,48 @@ export async function sendGuestBookingAccessCode(email: string, code: string) {
   if (!response.ok) throw new MessageServiceError("Email delivery failed", 502);
 }
 
+
+export type SendVerificationLinkInput = {
+  email: string;
+  url: string;
+  siteName?: string;
+};
+
+export async function sendEmailVerificationLink(input: SendVerificationLinkInput) {
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
+    throw new MessageServiceError("Email verification delivery is not configured", 503);
+  }
+
+  const siteName = input.siteName ?? "Letícia Nail Designer";
+  const safeSiteName = escapeHtml(siteName);
+  const safeUrl = escapeHtml(input.url);
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from: env.EMAIL_FROM,
+      to: [input.email],
+      subject: `Verifique seu e-mail - ${siteName}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#705844">
+          <h2>${safeSiteName}</h2>
+          <p>Confirme seu endereço de e-mail clicando no link abaixo.</p>
+          <p><a href="${safeUrl}" style="display:inline-block;padding:14px 24px;background:#705844;color:white;text-decoration:none;border-radius:8px">Verificar e-mail</a></p>
+          <p>Se você não solicitou esta verificação, ignore esta mensagem.</p>
+        </div>
+      `
+    }),
+    signal: AbortSignal.timeout(10_000)
+  });
+
+  if (!response.ok) {
+    throw new MessageServiceError("Email verification delivery failed", 502);
+  }
+}
+
 export type SendPasswordResetEmailInput = {
   email: string;
   url: string;
