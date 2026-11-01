@@ -85,7 +85,7 @@ function isSafePlanPath(filePath: string) {
   // stay outside the AI editor's write boundary.
   if (
     filePath.startsWith("/") ||
-    filePath.includes("\\\\") ||
+    filePath.includes("\\") ||
     filePath.split("/").some((part) => !part || part === "." || part === ".." || part.startsWith("."))
   ) return false;
 
