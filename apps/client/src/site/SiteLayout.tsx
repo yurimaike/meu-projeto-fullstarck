@@ -1,4 +1,4 @@
-import { Camera, LockKeyhole, MessageCircle, Sparkles } from "lucide-react";
+import { Camera, LockKeyhole, Menu, MessageCircle, Sparkles, X } from "lucide-react";
 import { NavLink, Link, useLocation } from "react-router-dom";
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
@@ -41,15 +41,19 @@ function usePageMeta(title: string, description: string) {
 export default function SiteLayout({ children, title, description }: SiteLayoutProps) {
   usePageMeta(title, description);
   const [adminLoginOpen, setAdminLoginOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   return (
     <div className="site-shell">
       <header className="site-header">
-        <div className="section-shell header-inner">
+        <div className="section-shell header-inner relative flex-wrap">
           <Link className="brand-lockup" to="/" aria-label="Nail Designer Leticia, início">
             <span className="brand-mark"><Sparkles size={15} /></span>
             <span><strong>Leticia</strong><em>nail designer</em></span>
           </Link>
+          <button type="button" className="ml-auto grid h-11 w-11 place-items-center rounded-full border border-[#d9c4b1] text-[#705844] md:hidden" onClick={() => setMobileMenuOpen((open) => !open)} aria-label={mobileMenuOpen ? "Fechar menu" : "Abrir menu"} aria-expanded={mobileMenuOpen} aria-controls="mobile-site-navigation">
+            {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+          </button>
           <nav className="desktop-nav" aria-label="Navegação principal">
             {navItems.map((item) => (
               <NavLink
@@ -71,6 +75,16 @@ export default function SiteLayout({ children, title, description }: SiteLayoutP
               Admin
             </button>
           </nav>
+          <div id="mobile-site-navigation" className={mobileMenuOpen ? "order-last flex w-full flex-col gap-1 rounded-2xl border border-[#e8d9cb] bg-[#fffaf4] p-3 shadow-lg md:hidden" : "hidden"}>
+            {navItems.map((item) => (
+              <NavLink key={item.to} to={item.to} end={item.to === "/"} onClick={() => setMobileMenuOpen(false)} className={({ isActive }: { isActive: boolean }) => isActive ? "rounded-xl bg-[#f0e3d7] px-4 py-3 text-sm font-semibold text-[#493629]" : "rounded-xl px-4 py-3 text-sm text-[#705844] hover:bg-[#f7eee6]"}>
+                {item.label}
+              </NavLink>
+            ))}
+            <button type="button" onClick={() => { setMobileMenuOpen(false); setAdminLoginOpen(true); }} className="flex items-center gap-2 rounded-xl px-4 py-3 text-left text-sm font-semibold text-[#705844] hover:bg-[#f7eee6]">
+              <LockKeyhole size={16} /> Administração
+            </button>
+          </div>
           <a className="header-cta" href={whatsappLink("Olá, Leticia! Gostaria de agendar um horário.")} target="_blank" rel="noreferrer">
             <MessageCircle size={16} />
             WhatsApp
