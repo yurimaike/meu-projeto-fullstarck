@@ -123,7 +123,7 @@ export async function startThirdPartyGoogleAuth(origin: string, returnPath: stri
 
   return {
     authUrl: authUrl.toString(),
-    state: envelope.data.state ?? "",
+    state: envelope.data?.state ?? "",
     traceId: envelope.trace_id
   };
 }
