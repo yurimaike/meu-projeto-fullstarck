@@ -57,6 +57,16 @@ O token não deve ser colocado em ficheiros .env versionados, código frontend o
 - A interface mostra links e estado reais devolvidos pelo GitHub; erros são apresentados sem alegar sucesso.
 - Testes cobrem autorização, confirmação ausente/expirada/alterada, caminhos proibidos, falhas parciais e criação de PR.
 
+## Ambientes de publicação do projecto
+
+A arquitectura de publicação identificada para este projecto é:
+- Cloudflare Pages: frontend público (`https://meu-projeto-fullstarck.pages.dev`) e previews de Pull Requests, se a integração GitHub estiver activa.
+- Render: serviço backend/API. A configuração real do serviço e os seus domínios devem ser confirmados no painel Render antes de qualquer alteração.
+- Turso: banco de dados SQLite/libSQL. Nunca executar migrações ou alterar dados de produção como parte de uma edição de conteúdo do site sem plano e aprovação próprios.
+- GitHub: repositório, branches, commits e Pull Requests.
+
+A publicação deve seguir esta ordem: branch -> Pull Request -> verificações automatizadas -> preview Cloudflare -> revisão humana -> merge autorizado -> deploy. Alterações que exigem backend ou schema também precisam de deploy coordenado no Render; migrações Turso exigem procedimento separado, backup e aprovação explícita. Não assumir que a integração Cloudflare/Render está configurada apenas porque o site público responde.
+
 ## Estado
 
-Este documento define o contrato de produto e segurança. A execução real ainda depende da implementação das rotas e da interface, da configuração do segredo GitHub no backend e dos testes. Não considerar o editor activo até todos os critérios de aceitação passarem.
+Este documento define o contrato de produto e segurança. A implementação funcional das rotas de planeamento/aprovação/execução e da interface ainda não foi feita. O editor não está activo. A execução real ainda depende da implementação, de testes executados com sucesso, da configuração de credenciais GitHub no ambiente privado do backend e da confirmação da integração Cloudflare Pages/Render. Não considerar o editor activo nem publicar até todos os critérios de aceitação passarem.
