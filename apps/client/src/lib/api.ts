@@ -64,8 +64,9 @@ type PlatformAIStreamChunk = {
 
 // Prefer streamPlatformAI unless the complete reply is required at once.
 export async function callPlatformAI(input: PlatformAIChatInput) {
-  const response = await apiFetch("/public-ai", {
+  const response = await apiFetch("/commercial-assistant", {
     method: "POST",
+    auth: false,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(input)
   });
