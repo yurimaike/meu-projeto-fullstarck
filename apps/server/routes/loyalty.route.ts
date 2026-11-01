@@ -5,6 +5,7 @@ import { apiFailure, apiSuccess } from "@repo/shared/http";
 import { adminRoute } from "../_core/route-helpers";
 import { DatabaseError, executeSql } from "../_core/db";
 import { BOOKING_SERVICES } from "../services/bookings";
+import { bodySizeLimit } from "../middlewares/body-size-limit";
 
 export const loyaltyRouter = new Hono();
 const paymentSchema = z.object({ paid: z.boolean() });
@@ -45,7 +46,7 @@ async function syncEarnedReward(email: string, name: string) {
   );
 }
 
-loyaltyRouter.patch("/bookings/:id/payment", adminRoute, async (c) => {
+loyaltyRouter.patch("/bookings/:id/payment", adminRoute, bodySizeLimit, async (c) => {
   const parsed = paymentSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Informe se o pagamento foi recebido."), 400);
   try {
@@ -60,7 +61,7 @@ loyaltyRouter.patch("/bookings/:id/payment", adminRoute, async (c) => {
   } catch (error) { return fail(c, error); }
 });
 
-loyaltyRouter.patch("/bookings/:id/completion", adminRoute, async (c) => {
+loyaltyRouter.patch("/bookings/:id/completion", adminRoute, bodySizeLimit, async (c) => {
   const parsed = completionSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Informe se o atendimento foi concluído."), 400);
   try {
@@ -88,7 +89,7 @@ loyaltyRouter.get("/admin", adminRoute, async (c) => {
   } catch (error) { return fail(c, error); }
 });
 
-loyaltyRouter.patch("/settings", adminRoute, async (c) => {
+loyaltyRouter.patch("/settings", adminRoute, bodySizeLimit, async (c) => {
   const parsed = settingsSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Configuração inválida."), 400);
   try {
@@ -99,7 +100,7 @@ loyaltyRouter.patch("/settings", adminRoute, async (c) => {
   } catch (error) { return fail(c, error); }
 });
 
-loyaltyRouter.delete("/rewards/:id", adminRoute, async (c) => {
+loyaltyRouter.delete("/rewards/:id", adminRoute, bodySizeLimit, async (c) => {
   try {
     const current = await executeSql("SELECT status,expiresAt FROM loyalty_rewards WHERE id=?", [c.req.param("id")]);
     const reward = current.rows[0];
@@ -112,7 +113,7 @@ loyaltyRouter.delete("/rewards/:id", adminRoute, async (c) => {
   } catch (error) { return fail(c, error); }
 });
 
-loyaltyRouter.patch("/rewards/:id/validity", adminRoute, async (c) => {
+loyaltyRouter.patch("/rewards/:id/validity", adminRoute, bodySizeLimit, async (c) => {
   const parsed = validitySchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Informe a validade entre 1 e 60 meses."), 400);
   try {
@@ -122,7 +123,7 @@ loyaltyRouter.patch("/rewards/:id/validity", adminRoute, async (c) => {
   } catch (error) { return fail(c, error); }
 });
 
-loyaltyRouter.post("/rewards/:id/redeem", adminRoute, async (c) => {
+loyaltyRouter.post("/rewards/:id/redeem", adminRoute, bodySizeLimit, async (c) => {
   const parsed = redeemSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Informe a reserva e o serviço escolhido para o bônus."), 400);
   try {
