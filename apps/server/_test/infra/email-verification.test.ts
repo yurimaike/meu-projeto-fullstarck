@@ -55,10 +55,7 @@ describe("email verification routes", () => {
       locale: "zh"
     });
 
-    const stored = await executeSql("SELECT value FROM verification WHERE identifier = ?", [
-      `email-verification:${email}`
-    ]);
-    expect(JSON.parse(String(stored.rows[0]?.value)).code).toMatch(/^\d{6}$/);
+    expect(sentCodes.get(email.toLowerCase())).toMatch(/^\d{6}$/);
   });
 
   it("rate limits repeated verification code sends for the same user", async () => {
