@@ -67,19 +67,20 @@ export async function startThirdPartyGoogleAuth(origin: string, returnPath: stri
   });
 
   if (!resp.ok) {
-    const message = await resp.text().catch(() => resp.statusText);
+    // Do not forward upstream response bodies to the public caller.
     throw new ThirdPartyGoogleAuthError(
       "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
-      `Third-party Google auth start failed (${resp.status}): ${message}`,
+      "Third-party Google sign-in is temporarily unavailable",
       502
     );
   }
 
   const envelope = (await resp.json()) as GoogleStartEnvelope;
   if (envelope.code !== 0 || !envelope.data?.auth_url) {
+    // Provider messages can contain internal details; keep the public error generic.
     throw new ThirdPartyGoogleAuthError(
       "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
-      `Third-party Google auth start failed: ${envelope.message || "missing auth_url"}`,
+      "Third-party Google sign-in is temporarily unavailable",
       502
     );
   }
