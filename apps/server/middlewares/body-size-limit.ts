@@ -65,6 +65,12 @@ export const bodySizeLimit: MiddlewareHandler = async (c, next) => {
 
   // 5. Armazenar corpo lido no contexto para o handler usar sem reler o stream
   c.set("rawBody", allBytes);
+  // Restore the consumed stream so handlers that call c.req.json() keep working.
+  c.req.raw = new Request(c.req.raw.url, {
+    method: c.req.raw.method,
+    headers: c.req.raw.headers,
+    body: allBytes
+  });
   return next();
 };
 
