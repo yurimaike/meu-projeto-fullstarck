@@ -28,7 +28,7 @@ O projeto está preparado para enviar e-mails pelo serviço Resend. Configure es
 - `EMAIL_FROM`: remetente verificado no Resend, por exemplo `Agenda Letícia <agenda@seudominio.com>`.
 - `BOOKING_ADMIN_EMAILS`: e-mails dos destinatários das notificações de reservas, separados por vírgulas; configure apenas no ambiente privado do backend.
 
-Sem essas duas variáveis, reservas e decisões continuam a ser gravadas, mas os e-mails não são enviados. O backend regista um aviso no log. A chave Resend nunca deve ser colocada no frontend.
+Sem as variáveis necessárias configuradas (`RESEND_API_KEY`, `EMAIL_FROM` e `BOOKING_ADMIN_EMAILS`), reservas e decisões continuam a ser gravadas, mas as notificações por e-mail podem não ser enviadas. O backend regista um aviso no log. A chave Resend nunca deve ser colocada no frontend.
 
 Com o provedor configurado:
 
