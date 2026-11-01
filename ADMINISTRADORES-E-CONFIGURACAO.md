@@ -8,7 +8,7 @@ Os administradores devem criar as suas contas pela página `/auth`. Para protege
 -- Substitua pelos e-mails administrativos autorizados, fora do repositório público.\nUPDATE user SET role = 'admin' WHERE lower(email) IN ('admin1@example.com', 'admin2@example.com');
 ```
 
-Os dois endereços recebem permissões equivalentes no painel `/admin`. Não existe cadastro público de administradores e não se deve compartilhar senhas.
+As contas autorizadas recebem permissões equivalentes no painel `/admin`. Não existe cadastro público de administradores e não se deve compartilhar senhas.
 
 ## Reservas
 
