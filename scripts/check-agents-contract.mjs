@@ -68,7 +68,7 @@ const COVERED_FILES = [
   },
   {
     path: "apps/server/middlewares/with-session.ts",
-    allow: ["PUBLIC_API_PREFIXES"]
+    allow: ["PUBLIC_API_PREFIXES", "buildBetterAuthSessionHeaders"]
   },
   {
     path: "apps/server/_core/public-url.ts",
