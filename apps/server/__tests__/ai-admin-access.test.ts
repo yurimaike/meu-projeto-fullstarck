@@ -85,7 +85,7 @@ describe("admin AI access boundary", () => {
     "apps/client/src/auth/session.ts",
     "apps/client/src/../../server/secrets.ts",
     "/apps/client/src/pages/Home.tsx",
-    "apps/client/src\\\u005csecret.ts"
+    "apps/client/src\\secret.ts"
   ])("rejects an edit plan targeting unsafe path %s", async (unsafePath) => {
     const plan = {
       title: "Alteração proposta",
