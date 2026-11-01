@@ -254,6 +254,21 @@ describe("third-party-google-auth: callback", () => {
     expect(users.rows.length).toBe(1);
   });
 
+  it("blocks a new Google account when its email was not authorised by an admin", async () => {
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/callback", {
+        user: GOOGLE_USER,
+        token: GATEWAY_TOKEN,
+        landing_path: "/"
+      })
+    );
+    expect(res.status).toBe(403);
+    const body = await res.json() as { error?: { code?: string } };
+    expect(body.error?.code).toBe("EMAIL_NOT_AUTHORIZED");
+    const users = await executeSql("SELECT id FROM user WHERE email = ?", ["portal.owner@example.com"]);
+    expect(users.rows).toHaveLength(0);
+  });
+
   it("rejects a callback whose shared token does not match → 401", async () => {
     const res = await app.fetch(
       jsonRequest("/api/third-party-google-auth/callback", {
