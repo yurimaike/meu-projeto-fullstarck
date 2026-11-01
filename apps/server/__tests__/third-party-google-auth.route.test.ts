@@ -175,7 +175,7 @@ describe("third-party-google-auth: start", () => {
     stubGatewayStart({ status: 500, body: { code: 1, message: "boom" } });
 
     const res = await app.fetch(
-      jsonRequest("/api/third-party-google-auth/start", { landing_path: "/" })
+      jsonRequest("/api/third-party-google-auth/start", { origin: "https://site.example", landing_path: "/" })
     );
 
     expect(res.status).toBe(502);
@@ -219,7 +219,7 @@ describe("third-party-google-auth: callback", () => {
     expect(res.status).toBe(409);
     const accounts = await executeSql(
       "SELECT accountId FROM account WHERE providerId = ?",
-      ["google"]
+      ["skywork-google"]
     );
     expect(accounts.rows.map((row) => String(row.accountId))).toEqual(["google-sub-123"]);
   });
