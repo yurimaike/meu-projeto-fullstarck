@@ -20,6 +20,7 @@ import { executeSql } from "../_core/db";
 vi.hoisted(() => {
   process.env.SKYWORK_GATEWAY_BASE_URL = "https://gateway.test";
   process.env.SKYWORK_API_TOKEN = "test-gateway-callback-token";
+  process.env.ALLOWED_ORIGINS = "http://localhost:3000,https://site.example";
 });
 
 const GATEWAY_TOKEN = "test-gateway-callback-token";
@@ -125,6 +126,18 @@ describe("third-party-google-auth: start", () => {
     const sent = JSON.parse(String(init.body)) as { origin: string; return_path: string };
     expect(sent.origin).toBe("https://site.example");
     expect(sent.return_path).toBe("/api/third-party-google-auth/callback?landing_path=%2Fadmin");
+  });
+
+  it("rejects an origin outside the configured allowlist before contacting the gateway", async () => {
+    const gateway = stubGatewayStart();
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/start", {
+        origin: "https://attacker.example",
+        landing_path: "/"
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(gateway).not.toHaveBeenCalled();
   });
 
   it("maps a gateway failure to 502 without leaking the flow", async () => {
