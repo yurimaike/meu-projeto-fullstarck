@@ -75,7 +75,15 @@ const GOOGLE_USER = {
   picture: "https://lh3.example/avatar.png"
 };
 
+async function authorizeGoogleEmail(email = "portal.owner@example.com") {
+  await executeSql(
+    "INSERT INTO authorized_emails (email, createdBy, createdAt) VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING",
+    [email.toLowerCase(), "test-fixture", Math.floor(Date.now() / 1000)]
+  );
+}
+
 async function completeCallback(landingPath = "/admin") {
+  await authorizeGoogleEmail();
   const res = await app.fetch(
     jsonRequest("/api/third-party-google-auth/callback", {
       user: GOOGLE_USER,
@@ -218,6 +226,7 @@ describe("third-party-google-auth: callback", () => {
 
   it("rejects linking a Google subject already owned by a different email", async () => {
     await completeCallback();
+    await authorizeGoogleEmail("another.person@example.com");
 
     const res = await app.fetch(
       jsonRequest("/api/third-party-google-auth/callback", {
