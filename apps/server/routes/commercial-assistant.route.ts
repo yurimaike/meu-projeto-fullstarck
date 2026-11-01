@@ -3,7 +3,7 @@ import { z } from "zod";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
 import { env } from "../_core/env";
 import { publicRoute } from "../_core/route-helpers";
-import { PlatformAIError, requestPlatformAIChat, type PlatformAIMessage } from "../services/platform-ai";
+import { PlatformAIError, requestPlatformAIChat, requestPlatformAIChatStream, type PlatformAIMessage } from "../services/platform-ai";
 import { bodySizeLimit } from "../middlewares/body-size-limit";
 import { distributedRateLimit, ipRateLimitCounter } from "../middlewares/distributed-rate-limit";
 
@@ -163,6 +163,13 @@ commercialAssistantRouter.post("", publicRoute, publicAIRateLimit, publicAIConcu
 
   try {
     const messages = buildMessages(parsed.data.messages);
+    if (parsed.data.stream) {
+      return await requestPlatformAIChatStream({
+        sceneKey: parsed.data.scene_key,
+        messages,
+        maxOutputTokens: env.PUBLIC_AI_MAX_OUTPUT_TOKENS
+      });
+    }
     const result = await requestPlatformAIChat({
       sceneKey: parsed.data.scene_key,
       messages,
@@ -190,6 +197,13 @@ commercialAssistantRouter.post("/", publicRoute, publicAIRateLimit, publicAIConc
 
   try {
     const messages = buildMessages(parsed.data.messages);
+    if (parsed.data.stream) {
+      return await requestPlatformAIChatStream({
+        sceneKey: parsed.data.scene_key,
+        messages,
+        maxOutputTokens: env.PUBLIC_AI_MAX_OUTPUT_TOKENS
+      });
+    }
     const result = await requestPlatformAIChat({
       sceneKey: parsed.data.scene_key,
       messages,
