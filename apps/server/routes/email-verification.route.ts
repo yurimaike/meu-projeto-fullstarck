@@ -23,7 +23,8 @@ const VerifyCodeSchema = z.object({
 export const emailVerificationRouter = new Hono();
 const sendCodeRateLimit = distributedRateLimit((c) => [
   ipRateLimitCounter(c, "email-code:send-ip", 10, 3600),
-  identityRateLimitCounter("email-code:send-email", c.var.currentUser?.email, 5, 3600)
+  identityRateLimitCounter("email-code:send-email", c.var.currentUser?.email, 5, 3600),
+  identityRateLimitCounter("email-code:send-cooldown", c.var.currentUser?.email, 1, RESEND_COOLDOWN_SECONDS)
 ]);
 const verifyCodeRateLimit = distributedRateLimit((c) => [
   ipRateLimitCounter(c, "email-code:verify-ip", 10, 3600),
@@ -114,9 +115,10 @@ emailVerificationRouter.post("/send-code", protectedRoute, sendCodeRateLimit, bo
     );
   }
 
+  const verificationId = crypto.randomUUID();
   await getDb().delete(verification).where(eq(verification.identifier, identifier));
   await getDb().insert(verification).values({
-    id: crypto.randomUUID(),
+    id: verificationId,
     identifier,
     value: encodeVerificationValue({ codeHash: hashVerificationCode(code), attempts: 0 }),
     expiresAt: new Date(expiresAt),
@@ -133,7 +135,8 @@ emailVerificationRouter.post("/send-code", protectedRoute, sendCodeRateLimit, bo
       locale: requestLocale(c)
     });
   } catch (error) {
-    await getDb().delete(verification).where(eq(verification.identifier, identifier));
+    // Remove only the code created by this request; never delete a newer code.
+    await executeSql("DELETE FROM verification WHERE id = ?", [verificationId]);
     throw error;
   }
 
