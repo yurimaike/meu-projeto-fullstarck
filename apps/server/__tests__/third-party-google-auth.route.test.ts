@@ -196,9 +196,9 @@ describe("third-party-google-auth: callback", () => {
   });
 
   it.each([
-    ["false", { ...GOOGLE_USER, email_verified: false }],
-    ["missing", { sub: "google-sub-unverified", email: "unverified@example.com", name: "Unverified User" }]
-  ])("rejects a Google user whose email verification is %s → 403", async (_label, user) => {
+    ["false", { ...GOOGLE_USER, email_verified: false }, "portal.owner@example.com"],
+    ["missing", { sub: "google-sub-unverified", email: "unverified@example.com", name: "Unverified User" }, "unverified@example.com"]
+  ] as const)("rejects a Google user whose email verification is %s → 403", async (_label, user, email) => {
     const res = await app.fetch(
       jsonRequest("/api/third-party-google-auth/callback", {
         user,
@@ -209,9 +209,7 @@ describe("third-party-google-auth: callback", () => {
     const body = (await res.json()) as { error?: { code?: string } };
     expect(body.error?.code).toBe("THIRD_PARTY_GOOGLE_AUTH_EMAIL_NOT_VERIFIED");
 
-    const users = await executeSql("SELECT id FROM user WHERE email = ?", [
-      "unverified@example.com"
-    ]);
+    const users = await executeSql("SELECT id FROM user WHERE email = ?", [email]);
     expect(users.rows.length).toBe(0);
   });
 });
