@@ -63,7 +63,8 @@ export async function startThirdPartyGoogleAuth(origin: string, returnPath: stri
     body: JSON.stringify({
       origin,
       return_path: returnPath
-    })
+    }),
+    signal: AbortSignal.timeout(10_000)
   });
 
   if (!resp.ok) {
@@ -75,8 +76,28 @@ export async function startThirdPartyGoogleAuth(origin: string, returnPath: stri
     );
   }
 
-  const envelope = (await resp.json()) as GoogleStartEnvelope;
-  if (envelope.code !== 0 || !envelope.data?.auth_url) {
+  let envelope: GoogleStartEnvelope;
+  try {
+    envelope = (await resp.json()) as GoogleStartEnvelope;
+  } catch {
+    throw new ThirdPartyGoogleAuthError(
+      "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
+      "Third-party Google sign-in is temporarily unavailable",
+      502
+    );
+  }
+
+  let authUrl: URL;
+  try {
+    authUrl = new URL(envelope.data?.auth_url ?? "");
+  } catch {
+    throw new ThirdPartyGoogleAuthError(
+      "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
+      "Third-party Google sign-in is temporarily unavailable",
+      502
+    );
+  }
+  if (envelope.code !== 0 || authUrl.protocol !== "https:" || authUrl.hostname !== "accounts.google.com") {
     // Provider messages can contain internal details; keep the public error generic.
     throw new ThirdPartyGoogleAuthError(
       "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
@@ -86,7 +107,7 @@ export async function startThirdPartyGoogleAuth(origin: string, returnPath: stri
   }
 
   return {
-    authUrl: envelope.data.auth_url,
+    authUrl: authUrl.toString(),
     state: envelope.data.state ?? "",
     traceId: envelope.trace_id
   };
