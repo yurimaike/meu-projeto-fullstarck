@@ -1,4 +1,4 @@
-﻿import { createHash, createHmac, randomUUID } from "node:crypto";
+﻿import { createHash, createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
@@ -6,7 +6,6 @@ import { adminRoute } from "../_core/route-helpers";
 import { env } from "../_core/env";
 import { bodySizeLimit } from "../middlewares/body-size-limit";
 import { distributedRateLimit, identityRateLimitCounter } from "../middlewares/distributed-rate-limit";
-import { claimAdminPlanApproval } from "../services/upstash-redis";
 import {
   PlatformAIError,
   requestPlatformAIChat,
@@ -132,7 +131,7 @@ function verifyPlanApproval(token: string, userId: string, digest: string) {
   }
   const expected = Buffer.from(expectedSignature);
   const supplied = Buffer.from(suppliedSignature);
-  if (expected.length !== supplied.length || !require("node:crypto").timingSafeEqual(expected, supplied)) return null;
+  if (expected.length !== supplied.length || !timingSafeEqual(expected, supplied)) return null;
   try {
     const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
       sub?: unknown; digest?: unknown; exp?: unknown; jti?: unknown;
