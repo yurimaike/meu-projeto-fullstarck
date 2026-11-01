@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Bot, X, Send, Sparkles, LoaderCircle, MessageCircle, ChevronRight } from "lucide-react";
-import { callPlatformAI } from "@/lib/api";
+import { streamPlatformAI } from "@/lib/api";
 import type { PlatformAIChatMessage } from "@/lib/api";
 
 
@@ -47,7 +47,7 @@ export default function CommercialAIChat() {
     }
 
     const history: PlatformAIChatMessage[] = [
-      ...nextMessages.slice(-16).map((message) => ({
+      ...nextMessages.slice(-8).map((message) => ({
         role: message.role,
         content: message.content
       }))
@@ -56,10 +56,13 @@ export default function CommercialAIChat() {
     try {
       let reply = "";
       try {
-        reply = await callPlatformAI({
+        for await (const chunk of streamPlatformAI({
           scene_key: "commercial_chat",
           messages: history
-        });
+        })) {
+          reply += chunk;
+          setMessages([...nextMessages, { role: "assistant", content: reply }]);
+        }
       } catch {
         throw new Error("Não consegui conectar ao assistente. Tente novamente.");
       }
@@ -71,11 +74,6 @@ export default function CommercialAIChat() {
         ]);
         return;
       }
-
-      setMessages([
-        ...nextMessages,
-        { role: "assistant", content: reply }
-      ]);
     } catch {
       setMessages([
         ...nextMessages,
