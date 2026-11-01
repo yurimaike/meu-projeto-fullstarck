@@ -136,9 +136,13 @@ Scaffold-provided platform services (server-only):
   `type StoredFile`, `type SignedStorageFile`. Ready-made authed routes exist at `/api/storage` (multipart
   upload field `file`, optional `path`). Use this for uploads/files — do not wire a
   different storage provider unless explicitly asked.
-- `services/message.ts` — platform template email via Skywork Gateway:
-  `sendEmailVerificationCode(...)` (structured fields only). No arbitrary
-  subject/body/from emails through this channel.
+- `services/message.ts` — `sendEmailVerificationCode(...)` sends the structured
+  verification-code email; `sendPasswordResetEmail({ email, url, siteName? })`
+  sends Better Auth password-reset links. The latter uses
+  `SendPasswordResetEmailInput`; both require the server-side Resend settings.
+  `sendGuestBookingAccessCode(email, code)` sends the one-time guest booking
+  lookup code and also requires the server-side Resend settings.
+  No arbitrary subject/body/from email API is exposed.
 - `services/platform-ai.ts` — server-only Platform AI chat bridge:
   `requestPlatformAIChat({ sceneKey, messages })` uses `SKYWORK_API_TOKEN` +
   `SKYWORK_AI_BASE_URL`, `x-skywork-billing-source: skybot`, and

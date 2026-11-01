@@ -107,3 +107,22 @@ uploaded_files/
 # !!! DO NOT DELETE OR ADJUST: required by FC deploy flow !!!
 !apps/server/dist/
 # !!! END: changing this will break FC deployment !!!
+
+# --- Local backups (keep on computer, do not publish) ---
+.audit-backup-*/
+.agenda-backup-*/
+BACKUP-RECUPERACAO-*/
+*.backup*
+*.bak*
+
+# --- Old client build outputs ---
+apps/client/dist-*/
+
+# --- Old server Render build output ---
+apps/server/dist-render/
+apps/server/dist-render-phase*/
+
+# --- Local Skywork receipts and reconciliation data ---
+.skywork/receipts/
+.skywork/reconcile/
+.skywork/verify-receipt.json

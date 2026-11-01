@@ -18,6 +18,7 @@ export type PlatformAIMessage = {
 export type PlatformAIChatInput = {
   sceneKey: string;
   messages: PlatformAIMessage[];
+  maxOutputTokens?: number;
 };
 
 export type PlatformAIImageInput = {
@@ -67,27 +68,6 @@ function platformAIUrl(path: string) {
   return `${baseUrl}${path}`;
 }
 
-async function readUpstreamErrorMessage(response: Response) {
-  const raw = await response.text().catch(() => "");
-  if (!raw.trim()) return "";
-
-  try {
-    const payload = JSON.parse(raw) as {
-      error?: { message?: unknown } | string;
-      message?: unknown;
-    };
-    if (typeof payload.error === "object" && typeof payload.error?.message === "string") {
-      return payload.error.message;
-    }
-    if (typeof payload.message === "string") return payload.message;
-    if (typeof payload.error === "string") return payload.error;
-  } catch {
-    return raw.trim();
-  }
-
-  return raw.trim();
-}
-
 async function requestPlatformAIResponse(input: PlatformAIChatInput, stream: boolean) {
   const url = platformAIUrl(CHAT_COMPLETIONS_PATH);
   let response: Response;
@@ -103,7 +83,7 @@ async function requestPlatformAIResponse(input: PlatformAIChatInput, stream: boo
       body: JSON.stringify({
         messages: input.messages,
         stream,
-        max_tokens: 2048
+        max_tokens: input.maxOutputTokens ?? 2048
       }),
       signal: stream ? undefined : AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
@@ -112,10 +92,9 @@ async function requestPlatformAIResponse(input: PlatformAIChatInput, stream: boo
   }
 
   if (!response.ok) {
-    const upstreamMessage = await readUpstreamErrorMessage(response);
     throw new PlatformAIError(
       "PLATFORM_AI_UPSTREAM_ERROR",
-      `AI upstream error: ${response.status}${upstreamMessage ? `: ${upstreamMessage}` : ""}`,
+      "The AI service is temporarily unavailable",
       502
     );
   }
@@ -169,10 +148,9 @@ export async function requestPlatformAIImage(input: PlatformAIImageInput) {
   }
 
   if (!response.ok) {
-    const upstreamMessage = await readUpstreamErrorMessage(response);
     throw new PlatformAIError(
       "PLATFORM_AI_UPSTREAM_ERROR",
-      `AI image upstream error: ${response.status}${upstreamMessage ? `: ${upstreamMessage}` : ""}`,
+      "The AI service is temporarily unavailable",
       502
     );
   }

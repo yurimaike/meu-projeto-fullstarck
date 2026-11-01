@@ -65,7 +65,7 @@ describe("auth page verification flow", () => {
     fireEvent.change(screen.getByLabelText("Verification code"), {
       target: { value: "123456" },
     });
-    fireEvent.click(screen.getByRole("button", { name: "Verify email" }));
+    fireEvent.click(screen.getByRole("button", { name: "Verificar e-mail" }));
 
     await waitFor(() => expect(refetch).toHaveBeenCalledTimes(1));
     expect(apiFetch).toHaveBeenCalledWith(

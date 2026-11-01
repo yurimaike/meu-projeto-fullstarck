@@ -12,7 +12,7 @@ const local = {
 
 export default tseslint.config(
   {
-    ignores: ["dist/**", "dist-ssr/**"]
+    ignores: ["dist/**", "dist-*/**", "dist-ssr/**"]
   },
   js.configs.recommended,
   ...tseslint.configs.recommended,

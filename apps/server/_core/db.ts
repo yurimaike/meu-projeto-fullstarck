@@ -14,13 +14,17 @@ import { env } from "./env";
 
 export type DatabaseErrorCode =
   | "DATABASE_UNCONFIGURED"
-  | "DATABASE_QUERY_FAILED";
+  | "DATABASE_QUERY_FAILED"
+  | "INVALID_INPUT"
+  | "SLOT_UNAVAILABLE"
+  | "BOOKING_NOT_PENDING";
 
 export class DatabaseError extends Error {
   constructor(
     readonly code: DatabaseErrorCode,
     message: string,
-    readonly status = 500
+    readonly status = 500,
+    readonly databaseMessage = ""
   ) {
     super(message);
     this.name = "DatabaseError";
@@ -35,12 +39,16 @@ let db: LibSQLDatabase<typeof schema> | null = null;
 type FetchInput = Parameters<typeof fetch>[0];
 
 export function isDatabaseConfigured() {
-  return Boolean(env.SKYBASE_DB_ENDPOINT && env.SKYBASE_DB_TOKEN && env.SKYBASE_DB_NAMESPACE);
+  const tursoConfigured = Boolean(env.TURSO_DATABASE_URL && env.TURSO_AUTH_TOKEN);
+  const legacySkybaseConfigured = Boolean(
+    env.SKYBASE_DB_ENDPOINT && env.SKYBASE_DB_TOKEN && env.SKYBASE_DB_NAMESPACE
+  );
+  return tursoConfigured || legacySkybaseConfigured;
 }
 
 function assertConfigured() {
   if (!isDatabaseConfigured()) {
-    throw new DatabaseError("DATABASE_UNCONFIGURED", "Skybase database runtime env is not configured", 503);
+    throw new DatabaseError("DATABASE_UNCONFIGURED", "Database connection is not configured. Set TURSO_DATABASE_URL and TURSO_AUTH_TOKEN.", 503);
   }
 }
 
@@ -48,11 +56,20 @@ function getClient() {
   assertConfigured();
 
   if (!client) {
-    client = createClient({
-      url: env.SKYBASE_DB_ENDPOINT,
-      authToken: env.SKYBASE_DB_TOKEN,
-      fetch: createNamespaceFetch(env.SKYBASE_DB_NAMESPACE)
-    });
+    // Prefer Turso whenever its two required variables are present. The
+    // namespace fetch wrapper is only used by the temporary legacy fallback.
+    if (env.TURSO_DATABASE_URL && env.TURSO_AUTH_TOKEN) {
+      client = createClient({
+        url: env.TURSO_DATABASE_URL,
+        authToken: env.TURSO_AUTH_TOKEN
+      });
+    } else {
+      client = createClient({
+        url: env.SKYBASE_DB_ENDPOINT,
+        authToken: env.SKYBASE_DB_TOKEN,
+        fetch: createNamespaceFetch(env.SKYBASE_DB_NAMESPACE)
+      });
+    }
   }
 
   return client;
@@ -68,13 +85,26 @@ export function getDb() {
   return db;
 }
 
-function mapLibsqlError(error: unknown): DatabaseError {
+function mapLibsqlError(error: unknown, sql: string): DatabaseError {
   if (error instanceof DatabaseError) {
     return error;
   }
 
-  const message = error instanceof Error ? error.message : "Skybase database query failed";
-  return new DatabaseError("DATABASE_QUERY_FAILED", message, 502);
+  const databaseMessage = error instanceof Error ? error.message : "";
+  const isBookingSlotConflict =
+    /insert\s+into\s+bookings/i.test(sql) &&
+    /(uq_bookings_active_slot|bookings\.bookingDate|unique constraint failed)/i.test(databaseMessage);
+
+  if (isBookingSlotConflict) {
+    return new DatabaseError(
+      "SLOT_UNAVAILABLE",
+      "Este horário acabou de ser reservado. Escolha outro.",
+      409,
+      databaseMessage,
+    );
+  }
+
+  return new DatabaseError("DATABASE_QUERY_FAILED", "Database query failed", 502, databaseMessage);
 }
 
 export async function checkDatabaseHealth() {
@@ -86,7 +116,7 @@ export async function executeSql(sql: string, args?: SqlArgs): Promise<QueryResu
   try {
     return await getClient().execute({ sql, args });
   } catch (error) {
-    throw mapLibsqlError(error);
+    throw mapLibsqlError(error, sql);
   }
 }
 

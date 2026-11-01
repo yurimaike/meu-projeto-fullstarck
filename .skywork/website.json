@@ -4,10 +4,10 @@
   "verifyContractVersion": "website-verify-local-v4",
   "kind": "website",
   "websiteId": "01a1883d-b436-7d58-aee9-65014d4690ae",
-  "projectType": "frontend",
+  "projectType": "fullStack",
   "layout": "selfHostClient",
   "template": {
-    "id": "react",
+    "id": "self-host",
     "version": "prod_selfhost"
   },
   "build": {
@@ -15,9 +15,19 @@
     "distDir": "apps/client/dist"
   },
   "backend": {
-    "enabled": false
+    "enabled": true,
+    "runtime": "node",
+    "framework": "hono",
+    "buildCommand": "SERVER_BUILD_TARGET=web pnpm --filter server build",
+    "startCommand": "npm start",
+    "port": 3000,
+    "database": "libsql",
+    "healthPath": "/api/health",
+    "migrationsDir": "apps/server/migrations"
   },
-  "deployment": {},
+  "deployment": {
+    "target": "skybase"
+  },
   "capabilities": {},
   "backendBaseline": {
     "fingerprint": "01a6e78c7e6dd99252f3f1ab846463b3339ddf00f1a9880930a1d3a4d100563d",
@@ -49,6 +59,6 @@
   "routeInventory": {},
   "receipt": {
     "status": "active",
-    "activeReceiptDigest": "19073820a99e011a350bfd37d740f7dccd233d681869ccb543d4423cf3598fe6"
+    "activeReceiptDigest": "45866e31bb04f5c87d2cd797c87820364de071ff0a5ac02137120c9cc7a87a6a"
   }
 }

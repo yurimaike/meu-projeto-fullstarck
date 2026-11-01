@@ -1,19 +1,26 @@
-import fs from 'fs';
-import path from 'path';
+import { spawnSync } from "node:child_process";
 
-try {
-  const distIndex = path.resolve('dist/index.html');
-  const dist404 = path.resolve('dist/404.html');
-  const distRedirects = path.resolve('dist/_redirects');
+const outputDir = process.env.CLIENT_BUILD_OUT_DIR?.trim() || "dist";
 
-  if (fs.existsSync(distIndex)) {
-    fs.copyFileSync(distIndex, dist404);
-    console.log('[Postbuild] 404.html compilado gerado com sucesso.');
+const steps = [
+  ["sitemap-routes", ["node", "scripts/generate-sitemap-routes.mjs", "--output", `${outputDir}/sitemap-routes.json`]],
+  ["prerender", ["node", "scripts/prerender.mjs"]],
+];
+
+for (const [name, command] of steps) {
+  const [bin, ...args] = command;
+  const result = spawnSync(bin, args, {
+    stdio: "inherit",
+    env: {
+      ...process.env,
+      CLIENT_BUILD_OUT_DIR: outputDir,
+      NODE_ENV: "production",
+    },
+  });
+
+  if (result.status !== 0) {
+    const exitCode = result.status ?? "unknown";
+    console.warn(`[postbuild] ${name} skipped or failed with exit code ${exitCode}`);
+    break;
   }
-  if (!fs.existsSync(distRedirects)) {
-    fs.writeFileSync(distRedirects, '/* /index.html 200\n', 'utf8');
-    console.log('[Postbuild] _redirects gerado em dist/.');
-  }
-} catch (e) {
-  console.error('[Postbuild Error]', e);
 }

@@ -118,3 +118,25 @@ export type StorageFile = typeof storageFiles.$inferSelect;
 export type NewStorageFile = typeof storageFiles.$inferInsert;
 export type AiBusinessScene = typeof aiBusinessScenes.$inferSelect;
 export type NewAiBusinessScene = typeof aiBusinessScenes.$inferInsert;
+
+export const bookings = sqliteTable(
+  "bookings",
+  {
+    id: text("id").primaryKey(), bookingCode: text("bookingCode").notNull().unique(),
+    customerName: text("customerName").notNull(), customerEmail: text("customerEmail").notNull(),
+    customerPhone: text("customerPhone").notNull(), bookingDate: text("bookingDate").notNull(),
+    bookingTime: text("bookingTime").notNull(), service: text("service").notNull(),
+    status: text("status", { enum: ["pending", "confirmed", "rejected", "cancelled"] }).notNull().default("pending"),
+    userId: text("userId").references(() => user.id, { onDelete: "set null" }),
+    createdAt: text("createdAt").notNull().default(sql`CURRENT_TIMESTAMP`),
+    updatedAt: text("updatedAt").notNull().default(sql`CURRENT_TIMESTAMP`),
+    decidedAt: text("decidedAt"), decisionNote: text("decisionNote")
+  },
+  (table) => [
+    index("idx_bookings_date_status").on(table.bookingDate, table.status),
+    index("idx_bookings_email").on(table.customerEmail),
+    index("idx_bookings_user_date_status").on(table.userId, table.bookingDate, table.status)
+  ]
+);
+export type Booking = typeof bookings.$inferSelect;
+export type NewBooking = typeof bookings.$inferInsert;

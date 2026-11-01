@@ -1,7 +1,8 @@
 import { defineConfig } from "vite";
 import { fileURLToPath } from "node:url";
 
-const serverBuildTarget = process.env.SERVER_BUILD_TARGET === "web" ? "web" : "fc";
+const requestedBuildTarget = process.env.SERVER_BUILD_TARGET;
+const serverBuildTarget = requestedBuildTarget === "render" || requestedBuildTarget === "web" ? requestedBuildTarget : "fc";
 const fromRoot = (path: string) => fileURLToPath(new URL(`../../${path}`, import.meta.url));
 
 export default defineConfig({
@@ -17,8 +18,10 @@ export default defineConfig({
     ]
   },
   build: {
-    ssr: serverBuildTarget === "web" ? "_core/fc-entry.web.ts" : "_core/fc-entry.ts",
-    outDir: "dist",
+    ssr: serverBuildTarget === "web" || serverBuildTarget === "render"
+      ? "_core/fc-entry.web.ts"
+      : "_core/fc-entry.ts",
+    outDir: serverBuildTarget === "render" ? "dist-render" : "dist",
     emptyOutDir: true,
     target: "node20",
     rollupOptions: {

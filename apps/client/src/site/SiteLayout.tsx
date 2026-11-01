@@ -2,7 +2,8 @@ import { Camera, MessageCircle, Sparkles } from "lucide-react";
 import { NavLink, Link, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 import type { ReactNode } from "react";
-import { whatsappLink } from "./siteData";
+import { salonContact, whatsappLink } from "./siteData";
+import CommercialAIChat from "@/components/commercial/CommercialAIChat";
 
 type SiteLayoutProps = {
   children: ReactNode;
@@ -14,6 +15,7 @@ const navItems = [
   { to: "/", label: "Início" },
   { to: "/servicos", label: "Serviços" },
   { to: "/agenda", label: "Agenda" },
+  { to: "/minhas-reservas", label: "Minhas reservas" },
   { to: "/contato", label: "Contato" },
 ];
 
@@ -80,15 +82,17 @@ export default function SiteLayout({ children, title, description }: SiteLayoutP
             <Link to="/servicos">Serviços</Link>
             <Link to="/agenda">Agenda</Link>
             <Link to="/contato">Contato</Link>
-            <a href="https://www.instagram.com/naildesigner.lleticia/" target="_blank" rel="noreferrer"><Camera size={15} /> Instagram</a>
+            <a href={salonContact.instagram} target="_blank" rel="noreferrer"><Camera size={15} /> Instagram</a>
           </div>
           <div className="footer-contact">
             <span>Agendamentos</span>
             <a href={whatsappLink("Olá, Leticia! Gostaria de agendar um horário.")} target="_blank" rel="noreferrer">(51) 99890-1388</a>
+            <a href={`mailto:${salonContact.email}`}>{salonContact.email}</a>
           </div>
         </div>
         <div className="section-shell footer-bottom"><span>© 2026 Leticia Borges</span><span>Nova Tramandaí · RS</span></div>
       </footer>
+      <CommercialAIChat />
     </div>
   );
 }

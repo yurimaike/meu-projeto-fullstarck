@@ -1,33 +1,12 @@
 import { env } from "../_core/env";
 
-type ForbiddenEmailFields = {
-  from?: never;
-  fromEmail?: never;
-  fromName?: never;
-  subject?: never;
-  html?: never;
-  text?: never;
-  content?: never;
-  toEmail?: never;
-};
-
 export type SendEmailInput = {
   email: string;
   code: string;
   expiresInMinutes: number;
   siteName?: string;
   locale?: string;
-} & ForbiddenEmailFields;
-
-export type TemplateEmailInput = {
-  templateId: string;
-  locale?: string;
-  senderMode?: "auto" | "public" | "custom_domain";
-  data: Record<string, unknown>;
-  recipient?: {
-    email?: string;
-  };
-} & ForbiddenEmailFields;
+};
 
 export class MessageServiceError extends Error {
   constructor(
@@ -40,75 +19,151 @@ export class MessageServiceError extends Error {
   }
 }
 
-// Server-only platform template email bridge. Gateway owns sender identity,
-// subject lines, and HTML templates; generated apps pass structured fields only.
-function gatewayUrl(path: string) {
-  return `${env.SKYWORK_GATEWAY_BASE_URL.replace(/\/+$/, "")}${path}`;
-}
-
-async function postMessage(path: string, body: unknown) {
-  if (!env.SKYWORK_API_TOKEN) {
-    throw new MessageServiceError("SKYWORK_API_TOKEN is not configured", 500);
-  }
-
-  const response = await fetch(gatewayUrl(path), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Skywork-Api-Token": env.SKYWORK_API_TOKEN
-    },
-    body: JSON.stringify(body)
+function escapeHtml(value: string) {
+  return value.replace(/[&<>"']/g, (char) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#39;"
+    };
+    return entities[char] ?? char;
   });
-
-  let responseBody: unknown = null;
-  try {
-    responseBody = await response.json();
-  } catch {
-    // Keep the original HTTP status in the thrown error below.
-  }
-
-  const envelope = responseBody as { code?: number; message?: string; data?: unknown } | null;
-  if (!response.ok || !envelope || envelope.code !== 0) {
-    throw new MessageServiceError(
-      envelope?.message || "failed to send email",
-      response.status,
-      envelope?.code
-    );
-  }
-
-  return envelope.data;
-}
-
-export async function sendTemplateEmail(input: TemplateEmailInput) {
-  const body = {
-    template_id: input.templateId,
-    sender_mode: input.senderMode ?? "auto",
-    data: input.data,
-    recipient: input.recipient ?? {}
-  } as {
-    template_id: string;
-    locale?: string;
-    sender_mode: "auto" | "public" | "custom_domain";
-    data: Record<string, unknown>;
-    recipient: { email?: string };
-  };
-  if (input.locale) {
-    body.locale = input.locale;
-  }
-  return postMessage("/api/v1/website/message/email/template/send", body);
 }
 
 export async function sendEmailVerificationCode(input: SendEmailInput) {
-  return sendTemplateEmail({
-    templateId: "email_verification_code",
-    locale: input.locale,
-    data: {
-      code: input.code,
-      expires_in_minutes: input.expiresInMinutes,
-      site_name: input.siteName ?? "Website"
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
+    throw new MessageServiceError(
+      "RESEND_API_KEY and EMAIL_FROM must be configured",
+      500
+    );
+  }
+
+  const siteName = input.siteName ?? "Letícia Nail Designer";
+  const safeSiteName = escapeHtml(siteName);
+  const safeCode = escapeHtml(input.code);
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json"
     },
-    recipient: {
-      email: input.email
-    }
+    body: JSON.stringify({
+      from: env.EMAIL_FROM,
+      to: [input.email],
+      subject: `Seu código de verificação - ${siteName}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#705844">
+          <h2>${safeSiteName}</h2>
+          <p>Seu código de verificação é:</p>
+          <div style="font-size:32px;font-weight:bold;letter-spacing:8px;padding:20px;background:#f4e8dc;text-align:center;border-radius:12px">
+            ${safeCode}
+          </div>
+          <p>Este código expira em ${input.expiresInMinutes} minutos.</p>
+          <p>Se você não solicitou este código, ignore esta mensagem.</p>
+        </div>
+      `
+    })
   });
+
+  let responseBody: { id?: string; message?: string } | null = null;
+
+  try {
+    responseBody = await response.json() as {
+      id?: string;
+      message?: string;
+    };
+  } catch {
+    // Resposta sem JSON.
+  }
+
+  if (!response.ok) {
+    throw new MessageServiceError(
+      responseBody?.message || "Resend failed to send email",
+      response.status
+    );
+  }
+
+  return responseBody;
+}
+
+export async function sendGuestBookingAccessCode(email: string, code: string) {
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
+    throw new MessageServiceError("Email delivery is not configured", 503);
+  }
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      from: env.EMAIL_FROM,
+      to: [email],
+      subject: "Código para consultar suas reservas — Letícia Nail Designer",
+      html: `<div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#705844"><h2>Letícia Nail Designer</h2><p>Seu código para consultar reservas é:</p><div style="font-size:32px;font-weight:bold;letter-spacing:8px;padding:20px;background:#f4e8dc;text-align:center;border-radius:12px">${escapeHtml(code)}</div><p>O código expira em 10 minutos e pode ser usado uma única vez.</p><p>Se você não pediu esse código, ignore esta mensagem.</p></div>`
+    }),
+    signal: AbortSignal.timeout(10_000)
+  });
+  if (!response.ok) throw new MessageServiceError("Email delivery failed", 502);
+}
+
+export type SendPasswordResetEmailInput = {
+  email: string;
+  url: string;
+  siteName?: string;
+};
+
+export async function sendPasswordResetEmail(input: SendPasswordResetEmailInput) {
+  if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
+    throw new MessageServiceError(
+      "RESEND_API_KEY and EMAIL_FROM must be configured",
+      500
+    );
+  }
+
+  const siteName = input.siteName ?? "Letícia Nail Designer";
+  const safeSiteName = escapeHtml(siteName);
+  const safeUrl = escapeHtml(input.url);
+
+  const response = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.RESEND_API_KEY}`,
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      from: env.EMAIL_FROM,
+      to: [input.email],
+      subject: `Recuperação de senha - ${siteName}`,
+      html: `
+        <div style="font-family:Arial,sans-serif;max-width:520px;margin:auto;color:#705844">
+          <h2>${safeSiteName}</h2>
+          <p>Recebemos uma solicitação para redefinir sua senha.</p>
+          <p><a href="${safeUrl}" style="display:inline-block;padding:14px 24px;background:#705844;color:white;text-decoration:none;border-radius:8px">Criar nova senha</a></p>
+          <p>Este link expira em 1 hora.</p>
+          <p>Se você não solicitou a recuperação, ignore este e-mail.</p>
+        </div>
+      `
+    })
+  });
+
+  let responseBody: { id?: string; message?: string } | null = null;
+
+  try {
+    responseBody = await response.json() as {
+      id?: string;
+      message?: string;
+    };
+  } catch {
+    // Resposta sem JSON.
+  }
+
+  if (!response.ok) {
+    throw new MessageServiceError(
+      responseBody?.message || "Resend failed to send password reset email",
+      response.status
+    );
+  }
+
+  return responseBody;
 }

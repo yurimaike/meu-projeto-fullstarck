@@ -1,6 +1,6 @@
 import { ArrowUpRight, Camera, MapPin, MessageCircle, Phone } from "lucide-react";
 import SiteLayout from "../../site/SiteLayout";
-import { whatsappLink } from "../../site/siteData";
+import { salonContact, whatsappLink } from "../../site/siteData";
 
 export default function ContactPage() {
   return (
@@ -22,12 +22,19 @@ export default function ContactPage() {
             <p>(51) 99890-1388</p>
             <span className="contact-card-action">Enviar mensagem <ArrowUpRight size={17} /></span>
           </a>
-          <a className="contact-card" href="https://www.instagram.com/naildesigner.lleticia/" target="_blank" rel="noreferrer">
+          <a className="contact-card" href={salonContact.instagram} target="_blank" rel="noreferrer">
             <span className="contact-card-icon"><Camera size={22} /></span>
             <span className="contact-card-kicker">Portfólio e novidades</span>
             <h2>Instagram</h2>
-            <p>@naildesigner.lleticia</p>
+            <p>{salonContact.instagramHandle}</p>
             <span className="contact-card-action">Ver perfil <ArrowUpRight size={17} /></span>
+          </a>
+          <a className="contact-card" href={`mailto:${salonContact.email}`}>
+            <span className="contact-card-icon"><Phone size={22} /></span>
+            <span className="contact-card-kicker">Contato por e-mail</span>
+            <h2>E-mail</h2>
+            <p>{salonContact.email}</p>
+            <span className="contact-card-action">Enviar e-mail <ArrowUpRight size={17} /></span>
           </a>
         </section>
         <section className="section-shell contact-details">

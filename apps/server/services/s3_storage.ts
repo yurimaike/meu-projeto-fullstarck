@@ -9,6 +9,20 @@ import {
   updateStorageFile
 } from "../_core/db";
 import { env } from "../_core/env";
+import { StorageError } from "./storage-errors";
+import type { StorageErrorStatus } from "./storage-errors";
+import {
+  mapR2Error,
+  storageDeleteForUserR2,
+  storageGetByPathR2,
+  storageGetDownloadUrlR2,
+  storageGetForUserR2,
+  storageGetR2,
+  storagePutR2,
+  storageSignDownloadUrlR2
+} from "./r2-storage";
+
+export { StorageError } from "./storage-errors";
 
 export type StorageFileStatus = "pending" | "uploaded" | "failed" | "deleted";
 
@@ -75,18 +89,7 @@ type GatewayFileSignEnvelope = {
   trace_id?: string;
 };
 
-export class StorageError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly status = 500
-  ) {
-    super(message);
-    this.name = "StorageError";
-  }
-}
-
-export type StorageErrorStatus = 400 | 404 | 502 | 503;
+export type { StorageErrorStatus } from "./storage-errors";
 
 function getGatewayConfig() {
   if (!env.SKYWORK_GATEWAY_BASE_URL || !env.SKYWORK_API_TOKEN) {
@@ -230,6 +233,14 @@ export async function storageSignDownloadUrl(
     throw new StorageError("STORAGE_EXPIRES_SECONDS_INVALID", "Storage expires seconds must be a positive integer", 400);
   }
 
+  if (normalizedDownloadUrl.startsWith("r2://")) {
+    try {
+      return await storageSignDownloadUrlR2(normalizedDownloadUrl, expiresSeconds);
+    } catch (error) {
+      return mapR2Error(error);
+    }
+  }
+
   const { gatewayUrl, ak } = getGatewayConfig();
   const signUrl = new URL("/gateway/api/wb/s3_file_sign", `${gatewayUrl}/`);
   const resp = await fetch(signUrl, {
@@ -344,6 +355,13 @@ export async function storagePut(
   contentType = "application/octet-stream",
   options: { userId?: string | null } = {}
 ): Promise<StoredFile> {
+  if (env.STORAGE_PROVIDER === "r2") {
+    try {
+      return await storagePutR2(relKey, data, contentType, options);
+    } catch (error) {
+      return mapR2Error(error);
+    }
+  }
   const normalizedContentType = normalizeContentType(contentType);
   const size = dataSize(data);
   if (size <= 0) {
@@ -363,6 +381,14 @@ export async function storagePut(
 }
 
 export async function storageGet(id: string): Promise<StoredFile> {
+  const existing = await findStorageFileById(id);
+  if (existing?.downloadUrl.startsWith("r2://")) {
+    try {
+      return await storageGetR2(id);
+    } catch (error) {
+      return mapR2Error(error);
+    }
+  }
   const row = await findStorageFileById(id);
   if (!row) {
     throw new StorageError("STORAGE_FILE_NOT_FOUND", "Storage file not found", 404);
@@ -372,6 +398,14 @@ export async function storageGet(id: string): Promise<StoredFile> {
 }
 
 export async function storageGetForUser(id: string, userId: string): Promise<StoredFile> {
+  const existing = await findStorageFileByIdForUser(id, userId);
+  if (existing?.downloadUrl.startsWith("r2://")) {
+    try {
+      return await storageGetForUserR2(id, userId);
+    } catch (error) {
+      return mapR2Error(error);
+    }
+  }
   const row = await findStorageFileByIdForUser(id, userId);
   if (!row) {
     throw new StorageError("STORAGE_FILE_NOT_FOUND", "Storage file not found", 404);
@@ -381,6 +415,14 @@ export async function storageGetForUser(id: string, userId: string): Promise<Sto
 }
 
 export async function storageDeleteForUser(id: string, userId: string): Promise<StoredFile> {
+  const existing = await findStorageFileByIdForUser(id, userId);
+  if (existing?.downloadUrl.startsWith("r2://")) {
+    try {
+      return await storageDeleteForUserR2(id, userId);
+    } catch (error) {
+      return mapR2Error(error);
+    }
+  }
   const file = await storageGetForUser(id, userId);
   if (file.status === "deleted") {
     return file;
@@ -392,6 +434,14 @@ export async function storageDeleteForUser(id: string, userId: string): Promise<
 
 export async function storageGetByPath(path: string): Promise<StoredFile> {
   const normalizedPath = path.trim().replace(/^\/+/, "");
+  const existing = await findStorageFileByPath(normalizedPath);
+  if (existing?.downloadUrl.startsWith("r2://")) {
+    try {
+      return await storageGetByPathR2(normalizedPath);
+    } catch (error) {
+      return mapR2Error(error);
+    }
+  }
   const row = await findStorageFileByPath(normalizedPath);
   if (!row) {
     throw new StorageError("STORAGE_FILE_NOT_FOUND", "Storage file not found", 404);
@@ -401,12 +451,22 @@ export async function storageGetByPath(path: string): Promise<StoredFile> {
 }
 
 export async function storageGetDownloadUrl(id: string): Promise<string> {
+  const existing = await findStorageFileById(id);
+  if (existing?.downloadUrl.startsWith("r2://")) {
+    try {
+      return await storageGetDownloadUrlR2(id);
+    } catch (error) {
+      return mapR2Error(error);
+    }
+  }
   return (await storageGet(id)).downloadUrl;
 }
 
 export function storageErrorResponse(error: StorageError | DatabaseError) {
   const status: StorageErrorStatus =
-    error.status === 404 ? 404 : error.status === 400 ? 400 : error.status === 503 ? 503 : 502;
+    error.status === 404 || error.status === 400 || error.status === 413 || error.status === 415 || error.status === 429 || error.status === 503
+      ? error.status
+      : 502;
 
   return {
     body: apiFailure(error.code, error.message),

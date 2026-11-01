@@ -6,22 +6,17 @@ import { notFound } from "../middlewares/not-found";
 import { onError } from "../middlewares/on-error";
 import { getAuth } from "./auth";
 import { isDatabaseConfigured } from "./db";
+import { getAllowedOrigin } from "./env";
 import { apiFailure } from "@repo/shared/http";
 
 const app = new Hono({ strict: false });
 
-// The client site and this backend are deployed on different registrable
-// domains by design (skywork.website vs the FC subdomain), so cross-origin is
-// the normal case, not the exception. Auth rides the Authorization header
-// (bearer token, no cookies), which the browser never attaches automatically
-// — an origin allow-list adds no CSRF protection here and only breaks the
-// client when the deploy-time ALLOWED_ORIGINS injection is missing or stale.
-// Reflect the caller's origin instead of restricting it.
 app.use(
   "/api/*",
   cors({
-    origin: (origin) => origin || "*",
+    origin: (origin) => getAllowedOrigin(origin),
     exposeHeaders: ["set-auth-token"],
+    allowHeaders: ["Authorization", "Content-Type", "X-Auth-Return-Redirect"],
     allowMethods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     credentials: true
   })

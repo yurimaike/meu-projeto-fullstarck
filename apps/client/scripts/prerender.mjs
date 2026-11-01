@@ -6,6 +6,7 @@
 // the normal CSR app.
 import { readFileSync, writeFileSync, rmSync } from "fs";
 import { relative, resolve, sep } from "path";
+import { pathToFileURL } from "node:url";
 import React from "react";
 import { parse } from "@babel/parser";
 import _traverse from "@babel/traverse";
@@ -258,7 +259,9 @@ function createPrerenderSafeRenderPlugin(cwd) {
 
 async function run() {
   const cwd = process.cwd();
-  const htmlPath = resolve(cwd, "dist/index.html");
+  const outputDir = process.env.CLIENT_BUILD_OUT_DIR?.trim() || "dist";
+  const prerenderDir = `${outputDir}-ssr`;
+  const htmlPath = resolve(cwd, outputDir, "index.html");
 
   let template;
   try {
@@ -267,7 +270,7 @@ async function run() {
     return warnAndSkip(`cannot read ${htmlPath}`, e);
   }
   if (!ROOT_RE.test(template)) {
-    return warnAndSkip("no <div id=\"root\"> in dist/index.html (self-contained HTML?)");
+    return warnAndSkip(`no <div id="root"> in ${outputDir}/index.html (self-contained HTML?)`);
   }
 
   // Idempotent: if #root already holds baked markup (e.g. the npm postbuild hook
@@ -297,7 +300,7 @@ async function run() {
           external: ["react", "react-dom", "react-dom/server"],
           output: { format: "es", entryFileNames: "App.js" },
         },
-        outDir: "dist-ssr",
+        outDir: prerenderDir,
         emptyOutDir: true,
       },
       ssr: { noExternal: true },
@@ -315,7 +318,8 @@ async function run() {
     installBrowserGlobals(window);
 
     const { renderToString } = await import("react-dom/server");
-    const { default: App } = await import(`${resolve(cwd, "dist-ssr/App.js")}?prerender=${Date.now()}`);
+    const appBundleUrl = pathToFileURL(resolve(cwd, prerenderDir, "App.js")).href;
+    const { default: App } = await import(`${appBundleUrl}?prerender=${Date.now()}`);
     const html = renderToString(React.createElement(App));
 
     if (!html.trim()) return warnAndSkip("empty SSR output");
@@ -326,12 +330,12 @@ async function run() {
     // from page text (e.g. "NT$1,200" baked as "NT,200").
     const rendered = template.replace(ROOT_RE, () => `<div id="root">${html}</div>`);
     writeFileSync(htmlPath, rendered);
-    console.log("[prerender] home page baked into dist/index.html");
+    console.log(`[prerender] home page baked into ${outputDir}/index.html`);
   } catch (e) {
     return warnAndSkip("render failed", e);
   } finally {
     try { if (window?.happyDOM) await window.happyDOM.close(); } catch {}
-    try { rmSync(resolve(cwd, "dist-ssr"), { recursive: true, force: true }); } catch {}
+    try { rmSync(resolve(cwd, prerenderDir), { recursive: true, force: true }); } catch {}
   }
 }
 

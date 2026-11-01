@@ -52,11 +52,11 @@ Backend runtime env contract:
 | `SKYBASE_DB_ENDPOINT` | Yes for DB-backed APIs | skybase-controller | sqld/libsql user API endpoint for this session, for example `http://10.59.118.218:8080` |
 | `SKYBASE_DB_TOKEN` / `SKYBASE_DB_AUTH_TOKEN` | Yes for DB-backed APIs | skybase-controller | libsql rw token used as `Authorization: Bearer <token>`; `SKYBASE_DB_AUTH_TOKEN` is accepted as a controller-compatible alias |
 | `SKYBASE_DB_NAMESPACE` | Yes for DB-backed APIs | skybase-controller | tenant namespace sent as `x-namespace` on libsql requests |
-| `BETTER_AUTH_SECRET` | Recommended for production | controller/deploy config, local `.env` in dev | Better Auth signing secret |
+| `BETTER_AUTH_SECRET` | Required in production | controller/deploy config, local `.env` in dev | Better Auth signing secret |
 | `BETTER_AUTH_URL` | Yes | controller/deploy config, local `.env` in dev | Public auth base URL, for example `http://localhost:3100/api/auth` |
 | `ALLOWED_ORIGINS` | Yes | controller/deploy config, local `.env` in dev | Comma-separated CORS origins |
-| `GOOGLE_CLIENT_ID` | Optional | OAuth provider config | Enables Google login when paired with `GOOGLE_CLIENT_SECRET` |
-| `GOOGLE_CLIENT_SECRET` | Optional | OAuth provider config | Enables Google login when paired with `GOOGLE_CLIENT_ID` |
+| `GOOGLE_CLIENT_ID` | Optional, local development only | Local OAuth provider config | Enables the Better Auth Google flow only outside production |
+| `GOOGLE_CLIENT_SECRET` | Optional, local development only | Local OAuth provider config | Enables the Better Auth Google flow only outside production |
 
 `SKYBASE_DB_TOKEN` / `SKYBASE_DB_AUTH_TOKEN` is not a Better Auth session token, user token, or skybase-controller `X-Auth-Token`. It is the libsql database token injected into this backend runtime. The app does not create this token and does not use DB admin email/password at runtime. Template code normalizes both names to `env.SKYBASE_DB_TOKEN`; when both names are present, `SKYBASE_DB_AUTH_TOKEN` wins.
 
@@ -74,7 +74,7 @@ ALLOWED_ORIGINS=http://localhost:3100
 
 If Vite starts on a fallback port such as `3101`, update `BETTER_AUTH_URL` and `ALLOWED_ORIGINS` to that port for local testing.
 
-Production startup does not fail when `BETTER_AUTH_SECRET` is missing; the app falls back to a template default so demos can boot. Set a stable random `BETTER_AUTH_SECRET` before using real user auth. Missing `SKYBASE_DB_ENDPOINT`, DB token, or `SKYBASE_DB_NAMESPACE` does not block `/api/health`, but DB-backed APIs and `/api/auth/*` return `DATABASE_UNCONFIGURED`.
+Production startup fails when `BETTER_AUTH_SECRET` is missing; configure a stable, random secret in the deployment environment. Missing database configuration does not block `/api/health`, but database-backed APIs and `/api/auth/*` return `DATABASE_UNCONFIGURED`.
 
 ## Authentication
 
@@ -88,7 +88,7 @@ Supported auth flows:
 
 - username + password
 - email + password
-- Google login when Google env is provided
+- Google login through the third-party gateway in production; direct Better Auth Google OAuth is local-development only
 - bearer token transport for API calls
 
 Better Auth data is stored in skybase-db through its Drizzle adapter. Required auth tables are defined in the Drizzle schema and applied by agent database tooling, not by this app at runtime.

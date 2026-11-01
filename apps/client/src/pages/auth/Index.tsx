@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from "react";
+﻿import { FormEvent, useEffect, useState } from "react";
 import { Navigate, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { authClient } from "@/lib/auth";
@@ -48,7 +48,7 @@ const AuthPage = () => {
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [password, setSenha] = useState("");
   const [verificationCode, setVerificationCode] = useState("");
   const [pendingVerificationEmail, setPendingVerificationEmail] = useState("");
   const [resendAvailableAt, setResendAvailableAt] = useState(0);
@@ -114,6 +114,36 @@ const AuthPage = () => {
     }
   };
 
+  const onForgotPassword = async () => {
+    if (!email.trim()) {
+      toast.error("Digite seu e-mail primeiro.");
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      const response = await apiFetch("/auth/request-password-reset", {
+        method: "POST",
+        auth: false,
+        silent: true,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: email.trim(),
+          redirectTo: `${window.location.origin}/reset-password`
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error("Não foi possível solicitar a recuperação. Tente novamente.");
+      }
+
+      toast.success("Se o e-mail estiver cadastrado, você receberá um link de recuperação.");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao solicitar recuperação.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
   const sendVerificationCode = async () => {
     const response = await apiFetch("/api/email-verification/send-code", {
       method: "POST",
@@ -154,7 +184,7 @@ const AuthPage = () => {
       // session atom still says emailVerified: false until this refetch.
       await refetchSession();
 
-      toast.success("Email verified");
+      toast.success("E-mail verificado");
       navigate("/", { replace: true });
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Verification failed");
@@ -169,7 +199,7 @@ const AuthPage = () => {
       await sendVerificationCode();
       toast.success("Verification code resent");
     } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to resend code");
+      toast.error(error instanceof Error ? error.message : "Falha ao reenviar o código");
     } finally {
       setSubmitting(false);
     }
@@ -177,11 +207,11 @@ const AuthPage = () => {
 
   if (verificationEmail) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="min-h-screen flex items-center justify-center bg-[#f3eee7] p-4">
         <Card className="w-full max-w-sm">
           <CardHeader>
-            <CardTitle>Verify your email</CardTitle>
-            <CardDescription>Enter the 6-digit code sent to {verificationEmail}.</CardDescription>
+            <CardTitle>Verifique seu e-mail</CardTitle>
+            <CardDescription>Digite o código de 6 dígitos enviado para {verificationEmail}.</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={onVerifyCode} className="space-y-4">
@@ -199,7 +229,7 @@ const AuthPage = () => {
                 />
               </div>
               <Button type="submit" className="w-full" disabled={submitting || verificationCode.length !== 6}>
-                {submitting ? "Please wait..." : "Verify email"}
+                {submitting ? "Aguarde..." : "Verificar e-mail"}
               </Button>
               <Button
                 type="button"
@@ -208,7 +238,7 @@ const AuthPage = () => {
                 disabled={submitting || resendWaitSeconds > 0}
                 onClick={onResendCode}
               >
-                {resendWaitSeconds > 0 ? `Resend in ${resendWaitSeconds}s` : "Resend code"}
+                {resendWaitSeconds > 0 ? `Reenviar em ${resendWaitSeconds}s` : "Reenviar código"}
               </Button>
             </form>
           </CardContent>
@@ -218,12 +248,22 @@ const AuthPage = () => {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-background p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader>
-          <CardTitle>{mode === "signup" ? "Create account" : "Welcome back"}</CardTitle>
+    <div
+      className="relative flex min-h-screen items-center justify-center overflow-hidden bg-gradient-to-br from-[#f4e8dc] via-[#fffaf4] to-[#ead8c5] p-4 sm:p-8"
+      style={{ backgroundImage: "linear-gradient(135deg, rgba(248,239,228,0.78), rgba(255,250,244,0.70)), url('/images/fundo-leticia.png')", backgroundSize: "cover", backgroundPosition: "center", backgroundAttachment: "fixed" }}
+    >
+      <div className="pointer-events-none absolute inset-0 bg-gradient-to-b from-[#f8eee3]/35 via-[#fffaf4]/45 to-[#ead8c5]/65" />
+      <Card className="relative z-10 my-4 w-full max-w-md overflow-hidden rounded-[2rem] border border-white/80 bg-[#fffdfa] shadow-[0_20px_60px_rgba(92,65,43,0.16)]">
+        <div className="bg-gradient-to-b from-[#f4e8dc] to-[#fffdfa] px-4 py-7 text-center">
+          <div className="mb-2 text-3xl text-[#947B65]">✿</div>
+          <div className="font-serif text-3xl font-medium tracking-[0.25em] text-[#705844]">LETÍCIA</div>
+          <div className="mt-2 text-xs tracking-[0.3em] text-[#947B65]">NAIL DESIGNER</div>
+          <div className="mt-3 text-[10px] font-medium tracking-[0.18em] text-[#A88A70]">BEAUTY STUDIO • ÁREA ADMINISTRATIVA</div>
+        </div>
+        <CardHeader className="pt-6 text-center">
+          <CardTitle>{mode === "signup" ? "Criar sua conta" : "Bem-vinda!"}</CardTitle>
           <CardDescription>
-            {mode === "signup" ? "Sign up to get started." : "Sign in to your account."}
+            {mode === "signup" ? "Cadastre-se para começar." : "Entre na sua conta."}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -233,14 +273,14 @@ const AuthPage = () => {
             className="mb-4"
           >
             <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="signin">Sign in</TabsTrigger>
-              <TabsTrigger value="signup">Sign up</TabsTrigger>
+              <TabsTrigger value="signin">Entrar</TabsTrigger>
+              <TabsTrigger value="signup">Cadastrar</TabsTrigger>
             </TabsList>
           </Tabs>
           <form onSubmit={onSubmit} className="space-y-4">
             {mode === "signup" && (
               <div className="space-y-1.5">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">Nome</Label>
                 <Input
                   id="name"
                   value={name}
@@ -250,7 +290,7 @@ const AuthPage = () => {
               </div>
             )}
             <div className="space-y-1.5">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">E-mail</Label>
               <Input
                 id="email"
                 type="email"
@@ -261,21 +301,28 @@ const AuthPage = () => {
               />
             </div>
             <div className="space-y-1.5">
-              <Label htmlFor="password">Password</Label>
+              <Label htmlFor="password">Senha</Label>
               <Input
                 id="password"
                 type="password"
                 autoComplete={mode === "signup" ? "new-password" : "current-password"}
                 value={password}
-                onChange={(event) => setPassword(event.target.value)}
+                onChange={(event) => setSenha(event.target.value)}
                 required
                 minLength={8}
               />
             </div>
             <Button type="submit" className="w-full" disabled={submitting}>
-              {submitting ? "Please wait…" : mode === "signup" ? "Sign up" : "Sign in"}
+              {submitting ? "Aguarde…" : mode === "signup" ? "Cadastrar" : "Entrar"}
             </Button>
           </form>
+          {mode === "signin" && (
+            <div className="mt-3 text-center">
+              <Button type="button" variant="link" className="text-[#705844]" disabled={submitting} onClick={onForgotPassword}>
+                Esqueci minha senha
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
@@ -283,3 +330,4 @@ const AuthPage = () => {
 };
 
 export default AuthPage;
+

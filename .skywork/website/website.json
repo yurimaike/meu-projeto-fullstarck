@@ -3,8 +3,8 @@
   "kind": "websiteBinding",
   "website_id": "01a1883d-b436-7d58-aee9-65014d4690ae",
   "source_dir": ".",
-  "source_type": "react",
-  "framework": "vite",
+  "source_type": "self-host",
+  "framework": "hono",
   "manifest_path": ".skywork/website.json",
   "authority": "bindingHint"
 }

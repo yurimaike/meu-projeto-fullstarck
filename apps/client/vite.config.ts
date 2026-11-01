@@ -37,7 +37,7 @@ function cdnPrefixImages(): Plugin {
     while (s.startsWith('../')) s = s.slice(3);
     if (s.startsWith('/')) s = s.slice(1);
     // ensure it starts with images/
-    if (!s.startsWith('images/')) return p; // not under images â†’ leave as is
+    if (!s.startsWith('images/')) return p; // not under images → leave as is
     return '/' + s; // canonical: '/images/...'
   };
 
@@ -78,7 +78,7 @@ function cdnPrefixImages(): Plugin {
     code.replace(/url\((['"]?)([^'")]+)\1\)/g, (_m, q, p) => `url(${q}${toCDN(p, cdn)}${q})`);
 
   const rewriteJsxAst = (code: string, id: string, cdn: string) => {
-    const ast = parse(code, { sourceType: 'module', plugins: [renderSpaRedirects(), 'typescript', 'jsx'] });
+    const ast = parse(code, { sourceType: 'module', plugins: ['typescript', 'jsx'] });
     let rewrites = 0;
 
     traverse(ast, {
@@ -134,7 +134,7 @@ function cdnPrefixImages(): Plugin {
 
     if (!rewrites) return null;
     const out = generate(ast, { retainLines: true, sourceMaps: false }, code).code;
-    if (DEBUG) console.log(`[cdn] ${id} â†’ ${rewrites} rewrites`);
+    if (DEBUG) console.log(`[cdn] ${id} → ${rewrites} rewrites`);
     return out;
   };
 
@@ -226,7 +226,7 @@ export default defineConfig(({ mode, command }) => {
   return {
     envDir: "../..",
     server: {
-      host: "::",
+      host: "127.0.0.1",
       port: 3100,
     },
     plugins: [

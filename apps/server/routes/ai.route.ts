@@ -1,7 +1,9 @@
-import { Hono, type Context } from "hono";
+﻿import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
-import { protectedRoute } from "../_core/route-helpers";
+import { adminRoute } from "../_core/route-helpers";
+import { bodySizeLimit } from "../middlewares/body-size-limit";
+import { distributedRateLimit, identityRateLimitCounter } from "../middlewares/distributed-rate-limit";
 import {
   PlatformAIError,
   requestPlatformAIChat,
@@ -16,11 +18,11 @@ const SceneKeySchema = z
   .refine((sceneKey) => !sceneKey.endsWith("_") && !sceneKey.includes("__"));
 
 const MessageContentSchema = z.union([
-  z.string(),
+  z.string().max(10_000),
   z
     .array(
       z.discriminatedUnion("type", [
-        z.object({ type: z.literal("text"), text: z.string() }),
+        z.object({ type: z.literal("text"), text: z.string().max(10_000) }),
         z.object({
           type: z.literal("image_url"),
           image_url: z.object({ url: z.string().url() })
@@ -53,9 +55,27 @@ const ImageRequestSchema = z.object({
 });
 
 export const aiRouter = new Hono();
+const aiChatRateLimit = distributedRateLimit((c) => [
+  identityRateLimitCounter("admin-ai:chat-minute", c.var.currentUser?.id, 20, 60),
+  identityRateLimitCounter("admin-ai:chat-day", c.var.currentUser?.id, 100, 86400)
+]);
+const aiImageRateLimit = distributedRateLimit((c) => [
+  identityRateLimitCounter("admin-ai:image-minute", c.var.currentUser?.id, 3, 60),
+  identityRateLimitCounter("admin-ai:image-day", c.var.currentUser?.id, 20, 86400)
+]);
+
+function requestBody(c: Context) {
+  const body = c.get("rawBody") as Uint8Array | undefined;
+  if (!body) return null;
+  try {
+    return JSON.parse(new TextDecoder().decode(body)) as unknown;
+  } catch {
+    return null;
+  }
+}
 
 const chatHandler = async (c: Context) => {
-  const parsed = ChatRequestSchema.safeParse(await c.req.json().catch(() => null));
+  const parsed = ChatRequestSchema.safeParse(requestBody(c));
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid AI chat input"), 400);
   }
@@ -91,7 +111,7 @@ const chatHandler = async (c: Context) => {
 };
 
 const imageHandler = async (c: Context) => {
-  const parsed = ImageRequestSchema.safeParse(await c.req.json().catch(() => null));
+  const parsed = ImageRequestSchema.safeParse(requestBody(c));
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid AI image input"), 400);
   }
@@ -112,7 +132,8 @@ const imageHandler = async (c: Context) => {
   }
 };
 
-aiRouter.post("", protectedRoute, chatHandler);
-aiRouter.post("/", protectedRoute, chatHandler);
-aiRouter.post("/images", protectedRoute, imageHandler);
-aiRouter.post("/images/", protectedRoute, imageHandler);
+aiRouter.post("", adminRoute, aiChatRateLimit, bodySizeLimit, chatHandler);
+aiRouter.post("/", adminRoute, aiChatRateLimit, bodySizeLimit, chatHandler);
+aiRouter.post("/images", adminRoute, aiImageRateLimit, bodySizeLimit, imageHandler);
+aiRouter.post("/images/", adminRoute, aiImageRateLimit, bodySizeLimit, imageHandler);
+

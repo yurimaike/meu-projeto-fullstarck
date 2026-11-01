@@ -1,3 +1,4 @@
+import { randomInt } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
@@ -6,6 +7,7 @@ import { getDb } from "../_core/db";
 import { protectedRoute } from "../_core/route-helpers";
 import { user as userTable, verification } from "../db/schema";
 import { sendEmailVerificationCode } from "../services/message";
+import { distributedRateLimit, identityRateLimitCounter, ipRateLimitCounter } from "../middlewares/distributed-rate-limit";
 
 const CODE_TTL_MINUTES = 10;
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -17,13 +19,21 @@ const VerifyCodeSchema = z.object({
 });
 
 export const emailVerificationRouter = new Hono();
+const sendCodeRateLimit = distributedRateLimit((c) => [
+  ipRateLimitCounter(c, "email-code:send-ip", 10, 3600),
+  identityRateLimitCounter("email-code:send-email", c.var.currentUser?.email, 5, 3600)
+]);
+const verifyCodeRateLimit = distributedRateLimit((c) => [
+  ipRateLimitCounter(c, "email-code:verify-ip", 10, 3600),
+  identityRateLimitCounter("email-code:verify-email", c.var.currentUser?.email, 10, 3600)
+]);
 
 function identifierFor(email: string) {
   return `${VERIFICATION_PREFIX}${email.toLowerCase()}`;
 }
 
 function generateCode() {
-  return String(Math.floor(100000 + Math.random() * 900000));
+  return String(randomInt(100000, 1000000));
 }
 
 function requestLocale(c: { req: { header: (name: string) => string | undefined } }) {
@@ -56,7 +66,7 @@ function decodeVerificationValue(raw: string): VerificationValue {
   return { code: raw, attempts: 0 };
 }
 
-emailVerificationRouter.post("/send-code", protectedRoute, async (c) => {
+emailVerificationRouter.post("/send-code", protectedRoute, sendCodeRateLimit, async (c) => {
   const user = c.var.currentUser;
 
   if (user.emailVerified) {
@@ -109,7 +119,7 @@ emailVerificationRouter.post("/send-code", protectedRoute, async (c) => {
   return c.json(apiSuccess({ sent: true, expiresInMinutes: CODE_TTL_MINUTES }), 200);
 });
 
-emailVerificationRouter.post("/verify-code", protectedRoute, async (c) => {
+emailVerificationRouter.post("/verify-code", protectedRoute, verifyCodeRateLimit, async (c) => {
   const user = c.var.currentUser;
 
   const parsed = VerifyCodeSchema.safeParse(await c.req.json().catch(() => null));

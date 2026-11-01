@@ -66,7 +66,7 @@ const Index = () => {
           <div className="section-shell trust-grid">
             <div className="trust-item"><span className="trust-icon"><Clock3 size={18} /></span><div><strong>08h — 19h</strong><span>janela de atendimento</span></div></div>
             <div className="trust-item"><span className="trust-icon"><Heart size={18} /></span><div><strong>Acabamento delicado</strong><span>cuidado em cada detalhe</span></div></div>
-            <div className="trust-item"><span className="trust-icon"><Camera size={18} /></span><div><strong>@naildesigner.lleticia</strong><span>veja mais inspirações</span></div></div>
+            <a className="trust-item" href="https://www.instagram.com/naildesigner.lleticia/" target="_blank" rel="noreferrer"><span className="trust-icon"><Camera size={18} /></span><div><strong>@naildesigner.lleticia</strong><span>veja mais inspirações</span></div></a>
           </div>
         </section>
 

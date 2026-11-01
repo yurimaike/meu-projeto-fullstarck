@@ -1,14 +1,31 @@
 import { Hono, type Context } from "hono";
+import { randomUUID } from "node:crypto";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
+import { env } from "../_core/env";
 import { DatabaseError } from "../_core/db";
 import { protectedRoute } from "../_core/route-helpers";
+import { uploadBodyLimit } from "../middlewares/upload-body-limit";
 import { StorageError, storageDeleteForUser, storageErrorResponse, storageGetForUser, storagePut } from "../services/s3_storage";
+import { distributedRateLimit, identityRateLimitCounter } from "../middlewares/distributed-rate-limit";
+import { InvalidImageError, normalizeUploadedImage } from "../services/image-validation";
 
 export const storageRouter = new Hono();
+const storageUploadRateLimit = distributedRateLimit((c) => [
+  identityRateLimitCounter("storage:upload-minute", c.var.currentUser?.id, 10, 60),
+  identityRateLimitCounter("storage:upload-day", c.var.currentUser?.id, 50, 86400)
+]);
+let activeImageDecodes = 0;
 
 function toErrorResponse(error: unknown) {
   if (error instanceof StorageError || error instanceof DatabaseError) {
-    return storageErrorResponse(error);
+    const { status } = storageErrorResponse(error);
+    if (status === 400) return { body: apiFailure("INVALID_INPUT", "The requested file operation is invalid"), status };
+    if (status === 404) return { body: apiFailure("FILE_NOT_FOUND", "File not found"), status };
+    if (status === 413) return { body: apiFailure("PAYLOAD_TOO_LARGE", "The file exceeds the allowed limit"), status };
+    if (status === 415) return { body: apiFailure("UNSUPPORTED_FILE_TYPE", "Only valid JPEG, PNG, and WebP images are accepted"), status };
+    if (status === 429) return { body: apiFailure("RATE_LIMITED", "Too many file operations. Try again later."), status };
+    if (status === 503) return { body: apiFailure("STORAGE_UNAVAILABLE", "File storage is temporarily unavailable"), status };
+    return { body: apiFailure("STORAGE_REQUEST_FAILED", "The file operation could not be completed"), status };
   }
 
   throw error;
@@ -24,17 +41,42 @@ const uploadHandler = async (c: Context) => {
     return c.json(apiFailure("INVALID_INPUT", "Expected multipart/form-data"), 400);
   }
 
-  const file = body.get("file");
-  if (!(file instanceof File)) {
-    return c.json(apiFailure("INVALID_INPUT", "File is required"), 400);
+  const files = body.getAll("file");
+  if (files.length !== 1 || !(files[0] instanceof File)) {
+    return c.json(apiFailure("INVALID_INPUT", "Upload exactly one image file"), 400);
   }
 
-  const requestedPath = body.get("path");
-  const relKey = typeof requestedPath === "string" && requestedPath.trim() ? requestedPath : file.name;
-  const bytes = new Uint8Array(await file.arrayBuffer());
+  const file = files[0];
+  if (file.size <= 0) {
+    return c.json(apiFailure("INVALID_INPUT", "The image file is empty"), 400);
+  }
+  if (file.size > env.STORAGE_MAX_UPLOAD_BYTES) {
+    return c.json(apiFailure("PAYLOAD_TOO_LARGE", "The uploaded file exceeds the allowed size"), 413);
+  }
+
+  if (activeImageDecodes >= 1) {
+    c.header("Retry-After", "2");
+    return c.json(apiFailure("UPLOAD_BUSY", "Upload processing is busy. Try again shortly."), 429);
+  }
+
+  activeImageDecodes += 1;
+  let normalized: Awaited<ReturnType<typeof normalizeUploadedImage>>;
+  try {
+    normalized = await normalizeUploadedImage(new Uint8Array(await file.arrayBuffer()), file.type);
+  } catch (error) {
+    if (error instanceof InvalidImageError) {
+      const code = error.status === 413 ? "PAYLOAD_TOO_LARGE" : "UNSUPPORTED_FILE_TYPE";
+      return c.json(apiFailure(code, error.message), error.status);
+    }
+    return c.json(apiFailure("INVALID_IMAGE", "The uploaded image could not be processed"), 415);
+  } finally {
+    activeImageDecodes -= 1;
+  }
+
+  const relKey = `${randomUUID()}.${normalized.extension}`;
 
   try {
-    const storedFile = await storagePut(relKey, bytes, file.type, { userId: user.id });
+    const storedFile = await storagePut(relKey, normalized.bytes, normalized.contentType, { userId: user.id });
     return c.json(apiSuccess({ file: storedFile }), 200);
   } catch (error) {
     const { body: errorBody, status } = toErrorResponse(error);
@@ -42,8 +84,8 @@ const uploadHandler = async (c: Context) => {
   }
 };
 
-storageRouter.post("", protectedRoute, uploadHandler);
-storageRouter.post("/", protectedRoute, uploadHandler);
+storageRouter.post("", protectedRoute, storageUploadRateLimit, uploadBodyLimit, uploadHandler);
+storageRouter.post("/", protectedRoute, storageUploadRateLimit, uploadBodyLimit, uploadHandler);
 
 storageRouter.get("/:id", protectedRoute, async (c) => {
   const user = c.var.currentUser;

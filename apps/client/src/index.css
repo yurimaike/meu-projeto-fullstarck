@@ -394,3 +394,373 @@ h1, h2, h3, p { margin-top: 0; }
   .footer-contact { grid-column: 1 / -1; }
   .footer-bottom { gap: 12px; flex-direction: column; }
 }
+
+/* Customer details in the booking flow */
+.booking-fields { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 18px; }
+.booking-fields label { display: grid; gap: 7px; color: inherit; font-size: .92rem; }
+.booking-fields input { width: 100%; min-height: 46px; padding: 11px 13px; border: 1px solid rgba(90,70,70,.24); border-radius: 9px; background: rgba(255,255,255,.8); color: #302626; font: inherit; }
+.booking-fields input:focus { outline: 2px solid rgba(150,105,105,.35); outline-offset: 1px; }
+@media (min-width: 760px) { .booking-fields { grid-template-columns: 1fr 1fr; } .booking-fields label:first-child { grid-column: 1 / -1; } }
+
+/* Leticia AI - painel administrativo */
+.leticia-ai {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 9999;
+  font-family: inherit;
+}
+
+.leticia-ai-launcher {
+  width: 58px;
+  height: 58px;
+  border: 0;
+  border-radius: 50%;
+  background: #76543f;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 5px 20px #0002;
+}
+
+.leticia-ai-panel {
+  position: absolute;
+  right: 0;
+  bottom: 72px;
+  width: min(360px, calc(100vw - 32px));
+  height: min(520px, calc(100dvh - 120px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fffdf9;
+  border: 1px solid #e8ddd1;
+  border-radius: 18px;
+  box-shadow: 0 12px 40px #38271925;
+}
+
+.leticia-ai-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f1e7dc;
+  color: #493629;
+}
+
+.leticia-ai-avatar {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #76543f;
+  color: white;
+}
+
+.leticia-ai-header div:nth-child(2) {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+}
+
+.leticia-ai-header span,
+.leticia-ai-caption {
+  font-size: 12px;
+  color: #806c5d;
+}
+
+.leticia-ai-header button {
+  border: 0;
+  background: transparent;
+  color: #493629;
+  cursor: pointer;
+}
+
+.leticia-ai-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.leticia-ai-welcome {
+  margin: auto;
+  text-align: center;
+  color: #76543f;
+}
+
+.leticia-ai-welcome p {
+  color: #806c5d;
+  font-size: 14px;
+}
+
+.leticia-ai-message {
+  max-width: 88%;
+  padding: 11px 13px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.leticia-ai-message.user {
+  align-self: flex-end;
+  background: #76543f;
+  color: white;
+}
+
+.leticia-ai-message.assistant {
+  align-self: flex-start;
+  background: #f1e7dc;
+  color: #493629;
+}
+
+.leticia-ai-form {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #e8ddd1;
+}
+
+.leticia-ai-form input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid #dfd1c4;
+  border-radius: 22px;
+  padding: 11px 14px;
+  background: white;
+  color: #493629;
+}
+
+.leticia-ai-form button {
+  width: 42px;
+  min-width: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: #76543f;
+  color: white;
+  cursor: pointer;
+}
+
+.leticia-ai-form button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.leticia-ai-caption {
+  margin: 0;
+  padding: 0 12px 10px;
+  text-align: center;
+}
+
+.leticia-ai-spin {
+  animation: leticia-ai-rotation 1s linear infinite;
+}
+
+@keyframes leticia-ai-rotation {
+  to { transform: rotate(360deg); }
+}
+
+@media (max-width: 480px) {
+  .leticia-ai {
+    right: 16px;
+    bottom: 16px;
+  }
+}
+
+
+/* Commercial AI Chat - widget flutuante para clientes */
+.commercial-ai {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 9999;
+  font-family: inherit;
+}
+
+.commercial-ai-launcher {
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 50%;
+  background: #76543f;
+  color: #fff;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  box-shadow: 0 5px 20px #0002;
+}
+
+.commercial-ai-panel {
+  position: absolute;
+  right: 0;
+  bottom: 70px;
+  width: min(380px, calc(100vw - 32px));
+  height: min(560px, calc(100dvh - 120px));
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #fffdf9;
+  border: 1px solid #e8ddd1;
+  border-radius: 18px;
+  box-shadow: 0 12px 40px #38271925;
+}
+
+.commercial-ai-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  background: #f1e7dc;
+  color: #493629;
+}
+
+.commercial-ai-avatar {
+  width: 40px;
+  height: 40px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #76543f;
+  color: white;
+}
+
+.commercial-ai-header div:nth-child(2) {
+  display: grid;
+  gap: 3px;
+  flex: 1;
+}
+
+.commercial-ai-header span,
+.commercial-ai-caption {
+  font-size: 12px;
+  color: #806c5d;
+}
+
+.commercial-ai-header button {
+  border: 0;
+  background: transparent;
+  color: #493629;
+  cursor: pointer;
+}
+
+.commercial-ai-messages {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+}
+
+.commercial-ai-welcome {
+  margin: auto;
+  text-align: center;
+  color: #76543f;
+}
+
+.commercial-ai-welcome p {
+  color: #806c5d;
+  font-size: 14px;
+}
+
+.commercial-ai-message {
+  max-width: 88%;
+  padding: 11px 13px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.commercial-ai-message.user {
+  align-self: flex-end;
+  background: #76543f;
+  color: white;
+}
+
+.commercial-ai-message.assistant {
+  align-self: flex-start;
+  background: #f1e7dc;
+  color: #493629;
+}
+
+.commercial-ai-quick-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 16px;
+}
+
+.commercial-ai-quick-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  border: 0;
+  border-radius: 10px;
+  background: #f7f1ea;
+  color: #493629;
+  padding: 10px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  text-align: left;
+}
+
+.commercial-ai-quick-btn:hover {
+  background: #e8ddd1;
+}
+
+.commercial-ai-form {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #e8ddd1;
+}
+
+.commercial-ai-form input {
+  min-width: 0;
+  flex: 1;
+  border: 1px solid #dfd1c4;
+  border-radius: 22px;
+  padding: 11px 14px;
+  background: white;
+  color: #493629;
+}
+
+.commercial-ai-form button {
+  width: 42px;
+  min-width: 42px;
+  border: 0;
+  border-radius: 50%;
+  background: #76543f;
+  color: white;
+  cursor: pointer;
+}
+
+.commercial-ai-form button:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+
+.commercial-ai-caption {
+  margin: 0;
+  padding: 0 12px 10px;
+  text-align: center;
+}
+
+.commercial-ai-spin {
+  animation: leticia-ai-rotation 1s linear infinite;
+}
+
+@media (max-width: 480px) {
+  .commercial-ai {
+    right: 16px;
+    bottom: 16px;
+  }
+}

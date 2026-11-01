@@ -1,99 +1,26 @@
 import { ArrowUpRight, CalendarDays, Check, Clock3, MessageCircle } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import SiteLayout from "../../site/SiteLayout";
-import { availableTimes, dateOptions, services, whatsappLink } from "../../site/siteData";
+import { services, whatsappLink } from "../../site/siteData";
+import { apiFetch } from "@/lib/api";
 
+type ApiPayload<T> = { ok: boolean; data?: T; error?: { message?: string } };
+const times = ["08:00", "09:30", "11:00", "13:00", "14:30", "16:00", "17:30", "19:00"];
+function isoDate(offset:number) { const d=new Date(); d.setDate(d.getDate()+offset); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`; }
+function displayDate(value:string) { return new Intl.DateTimeFormat("pt-BR",{weekday:"long",day:"2-digit",month:"long"}).format(new Date(`${value}T12:00:00`)); }
 export default function AgendaPage() {
-  const [selectedDate, setSelectedDate] = useState(dateOptions[0].value);
-  const [selectedService, setSelectedService] = useState(services[0].name);
-  const [selectedTime, setSelectedTime] = useState<string | null>(null);
-
-  const message = `Olá, Leticia! Gostaria de solicitar um horário.%0A%0A serviço: ${selectedService}%0A data: ${selectedDate}%0A horário: ${selectedTime ?? "a combinar"}`;
-
-  return (
-    <SiteLayout
-      title="Agenda | Nail Designer Leticia"
-      description="Escolha um serviço e um horário entre 08h e 19h. A confirmação do atendimento é feita pelo WhatsApp."
-    >
-      <main>
-        <section className="page-intro page-intro-compact section-shell">
-          <p className="eyebrow"><span className="eyebrow-dot" /> Agenda aberta</p>
-          <h1>Reserve um momento<br /><em>para você.</em></h1>
-          <p>Selecione uma data, escolha o serviço e toque em um horário livre. A Leticia confirma tudo pelo WhatsApp.</p>
-        </section>
-
-        <section className="section-shell agenda-layout">
-          <div className="agenda-main">
-            <div className="agenda-step">
-              <div className="step-heading"><span>01</span><div><p className="eyebrow">Quando</p><h2>Escolha o melhor dia</h2></div></div>
-              <div className="date-picker" role="group" aria-label="Escolha a data">
-                {dateOptions.map((date) => (
-                  <button key={date.value} className={selectedDate === date.value ? "date-option is-selected" : "date-option"} onClick={() => setSelectedDate(date.value)}>
-                    <CalendarDays size={16} /><span>{date.label}</span>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="agenda-step">
-              <div className="step-heading"><span>02</span><div><p className="eyebrow">O que você deseja?</p><h2>Escolha o serviço</h2></div></div>
-              <div className="service-choice-grid">
-                {services.map((service) => (
-                  <button key={service.name} className={selectedService === service.name ? "service-choice is-selected" : "service-choice"} onClick={() => setSelectedService(service.name)}>
-                    <span className="choice-mark">{service.mark}</span><span>{service.name}</span>{selectedService === service.name && <Check size={16} />}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="agenda-step">
-              <div className="step-heading"><span>03</span><div><p className="eyebrow">Horários</p><h2>Escolha um horário livre</h2></div></div>
-              <div className="time-legend"><span><i className="legend-dot legend-free" /> Livre</span><span><i className="legend-dot legend-busy" /> Ocupado</span></div>
-              <div className="time-grid" role="group" aria-label="Horários disponíveis">
-                {availableTimes.map((slot) => {
-                  const isBusy = slot.status === "busy";
-                  const isSelected = selectedTime === slot.time;
-                  return (
-                    <button
-                      key={slot.time}
-                      className={`time-option ${isBusy ? "is-busy" : ""} ${isSelected ? "is-selected" : ""}`}
-                      disabled={isBusy}
-                      onClick={() => setSelectedTime(slot.time)}
-                      aria-label={`${slot.time}, ${isBusy ? "ocupado" : "livre"}`}
-                    >
-                      <Clock3 size={15} /> {slot.time}
-                      {isBusy && <span>lotado</span>}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-
-          <aside className="agenda-summary">
-            <div className="summary-top"><span className="summary-label">Seu pedido</span><span className="summary-status"><i /> online</span></div>
-            <h2>{selectedService}</h2>
-            <dl>
-              <div><dt>Data</dt><dd>{selectedDate}</dd></div>
-              <div><dt>Horário</dt><dd>{selectedTime ?? "Selecione abaixo"}</dd></div>
-              <div><dt>Local</dt><dd>Nova Tramandaí</dd></div>
-            </dl>
-            <div className="summary-divider" />
-            <p className="summary-note"><MessageCircle size={16} /> A confirmação e os valores são combinados diretamente com a Leticia.</p>
-            <button
-              className="button button-primary summary-button"
-              disabled={!selectedTime}
-              onClick={() => {
-                if (selectedTime) window.open(whatsappLink(message.replace(/%0A/g, "\n")), "_blank", "noopener,noreferrer");
-              }}
-            >
-              <MessageCircle size={17} /> Solicitar pelo WhatsApp <ArrowUpRight size={16} />
-            </button>
-            {!selectedTime && <p className="summary-hint">Escolha um horário livre para continuar.</p>}
-          </aside>
-        </section>
-      </main>
-    </SiteLayout>
-  );
+  const [selectedDate,setSelectedDate]=useState(isoDate(1)); const [selectedService,setSelectedService]=useState(services[0].name); const [selectedTime,setSelectedTime]=useState<string|null>(null);
+  const [name,setName]=useState(""); const [email,setEmail]=useState(""); const [phone,setPhone]=useState(""); const [busy,setBusy]=useState<string[]>([]); const [loading,setLoading]=useState(false); const [sending,setSending]=useState(false); const [notice,setNotice]=useState(""); const [bookingCode,setBookingCode]=useState("");
+  useEffect(()=>{let active=true;setLoading(true);setSelectedTime(null);apiFetch(`/bookings?date=${encodeURIComponent(selectedDate)}`,{auth:false,silent:true}).then(async r=>{const p=await r.json() as ApiPayload<{busyTimes:string[]}>;if(!r.ok||!p.ok)throw new Error(p.error?.message??"Não foi possível consultar os horários.");if(active)setBusy(p.data?.busyTimes??[]);}).catch(e=>{if(active){setBusy(times);setNotice(e instanceof Error?e.message:"Falha ao consultar horários.");}}).finally(()=>{if(active)setLoading(false);});return()=>{active=false;};},[selectedDate]);
+  async function submit() { if(!selectedTime)return;setSending(true);setNotice("");try{const response=await apiFetch("/bookings",{method:"POST",auth:false,headers:{"Content-Type":"application/json"},body:JSON.stringify({customerName:name,customerEmail:email,customerPhone:phone,bookingDate:selectedDate,bookingTime:selectedTime,service:selectedService})});const payload=await response.json() as ApiPayload<{bookingCode:string}>;if(!response.ok||!payload.ok)throw new Error(payload.error?.message??"Não foi possível solicitar a reserva.");const code=payload.data?.bookingCode??"";setBookingCode(code);setNotice(`Solicitação enviada! Seu código é ${code}. Aguarde a confirmação.`);setBusy(v=>[...v,selectedTime!]);const msg=`Olá! Solicitei um horário pelo site.\nNome: ${name}\nE-mail: ${email}\nWhatsApp: ${phone}\nCódigo: ${code}\nServiço: ${selectedService}\nData: ${selectedDate}\nHorário: ${selectedTime}`;window.open(whatsappLink(msg),"_blank","noopener,noreferrer");setSelectedTime(null);}catch(e){setNotice(e instanceof Error?e.message:"Erro ao enviar.");}finally{setSending(false);}}
+  const dateChoices=Array.from({length:7},(_,i)=>({value:isoDate(i+1),label:i===0?"Amanhã":displayDate(isoDate(i+1)).split(",")[0].slice(0,3)+" "+isoDate(i+1).slice(8)+"/"+isoDate(i+1).slice(5,7)}));
+  return <SiteLayout title="Agenda | Nail Designer Leticia" description="Solicite seu horário online."><main>
+    <section className="page-intro page-intro-compact section-shell"><p className="eyebrow"><span className="eyebrow-dot"/> Agenda aberta</p><h1>Reserve um momento<br/><em>para você.</em></h1><p>Escolha o serviço, a data e o horário. Sua solicitação será confirmada pela equipe.</p></section>
+    <section className="section-shell agenda-layout"><div className="agenda-main">
+      <div className="agenda-step"><div className="step-heading"><span>01</span><div><p className="eyebrow">Seus dados</p><h2>Quem está agendando?</h2></div></div><div className="booking-fields"><label>Nome completo<input value={name} onChange={e=>setName(e.target.value)} autoComplete="name" required placeholder="Seu nome"/></label><label>E-mail<input type="email" value={email} onChange={e=>setEmail(e.target.value)} autoComplete="email" required placeholder="voce@email.com"/></label><label>WhatsApp com DDD<input type="tel" value={phone} onChange={e=>setPhone(e.target.value)} autoComplete="tel" required placeholder="(00) 00000-0000"/></label></div></div>
+      <div className="agenda-step"><div className="step-heading"><span>02</span><div><p className="eyebrow">Quando</p><h2>Escolha o melhor dia</h2></div></div><div className="date-picker" role="group" aria-label="Escolha a data">{dateChoices.map(d=><button key={d.value} className={selectedDate===d.value?"date-option is-selected":"date-option"} onClick={()=>setSelectedDate(d.value)}><CalendarDays size={16}/><span>{d.label}</span></button>)}</div></div>
+      <div className="agenda-step"><div className="step-heading"><span>03</span><div><p className="eyebrow">O que você deseja?</p><h2>Escolha o serviço</h2></div></div><div className="service-choice-grid">{services.map(s=><button key={s.name} className={selectedService===s.name?"service-choice is-selected":"service-choice"} onClick={()=>setSelectedService(s.name)}><span className="choice-mark">{s.mark}</span><span>{s.name}</span>{selectedService===s.name&&<Check size={16}/>}</button>)}</div></div>
+      <div className="agenda-step"><div className="step-heading"><span>04</span><div><p className="eyebrow">Horários</p><h2>Escolha um horário livre</h2></div></div><div className="time-legend"><span><i className="legend-dot legend-free"/> Livre</span><span><i className="legend-dot legend-busy"/> Ocupado</span></div><div className="time-grid" role="group" aria-label="Horários disponíveis">{times.map(t=>{const isBusy=busy.includes(t);return <button key={t} className={`time-option ${isBusy?"is-busy":""} ${selectedTime===t?"is-selected":""}`} disabled={isBusy||loading} onClick={()=>setSelectedTime(t)} aria-label={`${t}, ${isBusy?"ocupado":"livre"}`}><Clock3 size={15}/>{t}{isBusy&&<span>lotado</span>}</button>;})}</div>{loading&&<p className="summary-hint">Consultando disponibilidade…</p>}</div>
+    </div><aside className="agenda-summary"><div className="summary-top"><span className="summary-label">Seu pedido</span><span className="summary-status"><i/> online</span></div><h2>{selectedService}</h2><dl><div><dt>Data</dt><dd>{displayDate(selectedDate)}</dd></div><div><dt>Horário</dt><dd>{selectedTime??"Selecione abaixo"}</dd></div><div><dt>Local</dt><dd>Nova Tramandaí</dd></div></dl><div className="summary-divider"/><p className="summary-note"><MessageCircle size={16}/> Sua reserva ficará pendente até a aprovação.</p><button className="button button-primary summary-button" disabled={!selectedTime||!name.trim()||!email.trim()||!phone.trim()||sending||loading} onClick={()=>void submit()}>{sending?"Enviando…":"Solicitar reserva"} <ArrowUpRight size={16}/></button>{!selectedTime&&<p className="summary-hint">Escolha um horário livre para continuar.</p>}{notice&&<p role="status" className="summary-hint">{notice}</p>}{bookingCode&&<p className="summary-hint">Guarde seu código: <strong>{bookingCode}</strong></p>}</aside></section>
+  </main></SiteLayout>;
 }
-
