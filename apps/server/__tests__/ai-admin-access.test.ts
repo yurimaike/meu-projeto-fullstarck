@@ -70,4 +70,14 @@ describe("admin AI access boundary", () => {
     const body = await response.json() as { error?: { code?: string } };
     expect(body.error?.code).toBe("FORBIDDEN");
   });
+
+  it.each(["/ai/plans/preview", "/ai/plans/approve", "/ai/plans/execute"])("rejects anonymous access to %s", async (path) => {
+    const response = await createApp().request(path, { method: "POST" });
+    expect(response.status).toBe(401);
+  });
+
+  it.each(["/ai/plans/preview", "/ai/plans/approve", "/ai/plans/execute"])("rejects customer access to %s", async (path) => {
+    const response = await createApp("user").request(path, { method: "POST" });
+    expect(response.status).toBe(403);
+  });
 });
