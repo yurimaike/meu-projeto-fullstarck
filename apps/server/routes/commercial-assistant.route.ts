@@ -84,7 +84,7 @@ const ChatRequestSchema = z.object({
     .min(1)
     .max(50),
   stream: z.boolean().optional().default(false),
-  visitor_id: z.string().min(16).max(80).regex(/^[a-zA-Z0-9_-]+$/).optional()
+  visitor_id: z.string().min(16).max(80).regex(/^[a-zA-Z0-9_-]+$/)
 });
 
 export const isPublic = true;
@@ -169,15 +169,13 @@ commercialAssistantRouter.post("", publicRoute, publicAIRateLimit, publicAIConcu
 
   try {
     const visitorId = parsed.data.visitor_id;
-    if (visitorId) {
-      if (await isChatVisitorBlocked(visitorId)) {
-        return c.json(apiFailure("CHAT_ACCESS_BLOCKED", "O atendimento pelo chat foi encerrado. Entre em contacto com a administração do salão."), 403);
-      }
-      const incident = detectSeriousChatIncident(parsed.data.messages);
-      if (incident) {
-        await recordChatIncident({ ...incident, visitorId });
-        return c.json(apiFailure("CHAT_ACCESS_BLOCKED", "Por segurança, o atendimento pelo chat foi encerrado. A administração foi notificada."), 403);
-      }
+    if (await isChatVisitorBlocked(visitorId)) {
+      return c.json(apiFailure("CHAT_ACCESS_BLOCKED", "O atendimento pelo chat foi encerrado. Entre em contacto com a administração do salão."), 403);
+    }
+    const incident = detectSeriousChatIncident(parsed.data.messages);
+    if (incident) {
+      await recordChatIncident({ ...incident, visitorId });
+      return c.json(apiFailure("CHAT_ACCESS_BLOCKED", "Por segurança, o atendimento pelo chat foi encerrado. A administração foi notificada."), 403);
     }
     const messages = buildMessages(parsed.data.messages);
     if (parsed.data.stream) {
