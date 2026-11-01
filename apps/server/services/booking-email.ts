@@ -25,7 +25,8 @@ async function sendEmail(to: string[], subject: string, html: string) {
     body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, html })
   });
   if (!response.ok) {
-    console.error("[booking-email] Falha no provedor de e-mail", response.status, await response.text().catch(() => ""));
+    // Keep diagnostics minimal; provider bodies may contain unnecessary details.
+    console.error("[booking-email] Falha no provedor de e-mail", response.status);
     return false;
   }
   return true;
