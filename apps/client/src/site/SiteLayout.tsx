@@ -1,9 +1,10 @@
-import { Camera, MessageCircle, Sparkles } from "lucide-react";
+import { Camera, LockKeyhole, MessageCircle, Sparkles } from "lucide-react";
 import { NavLink, Link, useLocation } from "react-router-dom";
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
 import { salonContact, whatsappLink } from "./siteData";
 import CommercialAIChat from "@/components/commercial/CommercialAIChat";
+import AdminLoginModal from "@/components/auth/AdminLoginModal";
 
 type SiteLayoutProps = {
   children: ReactNode;
@@ -39,6 +40,7 @@ function usePageMeta(title: string, description: string) {
 
 export default function SiteLayout({ children, title, description }: SiteLayoutProps) {
   usePageMeta(title, description);
+  const [adminLoginOpen, setAdminLoginOpen] = useState(false);
 
   return (
     <div className="site-shell">
@@ -59,15 +61,16 @@ export default function SiteLayout({ children, title, description }: SiteLayoutP
                 {item.label}
               </NavLink>
             ))}
+            <button
+              type="button"
+              onClick={() => setAdminLoginOpen(true)}
+              className="nav-link inline-flex items-center gap-2 border-0 bg-transparent"
+              aria-haspopup="dialog"
+            >
+              <LockKeyhole size={14} />
+              Admin
+            </button>
           </nav>
-          <NavLink
-            to="/admin"
-            className={({ isActive }: { isActive: boolean }) =>
-              isActive ? "nav-link is-active" : "nav-link"
-            }
-          >
-            Admin
-          </NavLink>
           <a className="header-cta" href={whatsappLink("Olá, Leticia! Gostaria de agendar um horário.")} target="_blank" rel="noreferrer">
             <MessageCircle size={16} />
             WhatsApp
@@ -101,6 +104,7 @@ export default function SiteLayout({ children, title, description }: SiteLayoutP
         <div className="section-shell footer-bottom"><span>© 2026 Leticia Borges</span><span>Nova Tramandaí · RS</span></div>
       </footer>
       <CommercialAIChat />
+      <AdminLoginModal open={adminLoginOpen} onOpenChange={setAdminLoginOpen} />
     </div>
   );
 }
