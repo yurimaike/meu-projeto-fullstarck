@@ -52,6 +52,7 @@ export async function resetDatabase(): Promise<void> {
   await executeSql("DELETE FROM session");
   await executeSql("DELETE FROM account");
   await executeSql("DELETE FROM verification");
+  await executeSql("DELETE FROM authorized_emails");
   await executeSql("DELETE FROM user");
 }
 
@@ -77,6 +78,10 @@ export async function signUpAndGetToken(
   const email = overrides.email ?? `test-${Date.now()}-${signupCounter}@example.com`;
   const password = overrides.password ?? "password1234";
   const name = overrides.name ?? "Test User";
+  await executeSql(
+    "INSERT INTO authorized_emails (email, createdBy, createdAt) VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING",
+    [email.toLowerCase(), "test-fixture", Math.floor(Date.now() / 1000)]
+  );
 
   const res = await app.fetch(
     new Request("http://localhost/api/auth/sign-up/email", {
