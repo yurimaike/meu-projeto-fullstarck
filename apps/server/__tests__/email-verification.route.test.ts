@@ -58,6 +58,10 @@ describe("email-verification: one-time code security", () => {
     expect(sent.status).toBe(200);
     expect(emailMock.send).toHaveBeenCalledTimes(1);
 
+    const resend = await sendCode(user.headers);
+    expect(resend.status).toBe(429);
+    expect(emailMock.send).toHaveBeenCalledTimes(1);
+
     const code = emailMock.send.mock.calls[0]?.[0].code;
     expect(code).toMatch(/^\d{6}$/);
 
