@@ -7,7 +7,17 @@ import type { PlatformAIChatMessage } from "@/lib/api";
 type ChatMessage = {
   role: "user" | "assistant";
   content: string;
+  timestamp?: number;
 };
+
+function formatChatTime(timestamp: number) {
+  return new Intl.DateTimeFormat("pt-BR", {
+    timeZone: "America/Sao_Paulo",
+    hour: "2-digit",
+    minute: "2-digit",
+    hourCycle: "h23"
+  }).format(timestamp);
+}
 
 const WELCOME_MESSAGE = `Olá! Sou a Letícia Comercial, assistente do salão Letícia Nail Designer. 💅
 
@@ -29,7 +39,7 @@ export default function CommercialAIChat() {
 
     const nextMessages: ChatMessage[] = [
       ...messages,
-      { role: "user", content: text }
+      { role: "user", content: text, timestamp: Date.now() }
     ];
 
     setMessages([...nextMessages, { role: "assistant", content: "" }]);
@@ -40,7 +50,7 @@ export default function CommercialAIChat() {
     if (text.length > MAX_MESSAGE_CHARS) {
       setMessages([
         ...nextMessages,
-        { role: "assistant", content: "Sua mensagem está muito longa. Por favor, envie uma mensagem menor." }
+        { role: "assistant", content: "Sua mensagem está muito longa. Por favor, envie uma mensagem menor.", timestamp: Date.now() }
       ]);
       setLoading(false);
       return;
@@ -70,17 +80,20 @@ export default function CommercialAIChat() {
       if (!reply.trim()) {
         setMessages([
           ...nextMessages,
-          { role: "assistant", content: "Não recebi uma resposta. Tente novamente." }
+          { role: "assistant", content: "Não recebi uma resposta. Tente novamente.", timestamp: Date.now() }
         ]);
         return;
       }
+
+      setMessages([...nextMessages, { role: "assistant", content: reply, timestamp: Date.now() }]);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "";
       setMessages([
         ...nextMessages,
         {
           role: "assistant",
-          content: detail || "Não consegui conectar ao assistente comercial. Verifique a conexão e tente novamente, ou fale diretamente conosco pelo WhatsApp."
+          content: detail || "Não consegui conectar ao assistente comercial. Verifique a conexão e tente novamente, ou fale diretamente conosco pelo WhatsApp.",
+          timestamp: Date.now()
         }
       ]);
     } finally {
@@ -148,6 +161,15 @@ export default function CommercialAIChat() {
                   {message.content || (loading && message.role === "assistant"
                     ? "Estou preparando a resposta..."
                     : "")}
+                  {message.timestamp ? (
+                    <time
+                      dateTime={new Date(message.timestamp).toISOString()}
+                      aria-label={`Enviada às ${formatChatTime(message.timestamp)} no horário de Brasília`}
+                      style={{ display: "block", marginTop: 5, fontSize: 11, opacity: 0.7, textAlign: message.role === "user" ? "right" : "left" }}
+                    >
+                      {formatChatTime(message.timestamp)}
+                    </time>
+                  ) : null}
                 </div>
                 {message.role === "user" ? <ChevronRight size={14} className="commercial-ai-user-arrow" /> : null}
               </div>
