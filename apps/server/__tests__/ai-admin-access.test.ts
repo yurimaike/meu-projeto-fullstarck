@@ -168,11 +168,11 @@ describe("admin AI access boundary", () => {
     expect(Number.isNaN(Date.parse(body.data?.expires_at ?? ""))).toBe(false);
   });
 
-  it("keeps GitHub execution disabled even for an administrator until the integration is ready", async () => {
+  it("rejects malformed execution requests before the disabled GitHub integration gate", async () => {
     const response = await createApp("admin").request("/ai/plans/execute", { method: "POST" });
-    expect(response.status).toBe(503);
+    expect(response.status).toBe(400);
     const body = await response.json() as { error?: { code?: string } };
-    expect(body.error?.code).toBe("EDITOR_NOT_CONFIGURED");
+    expect(body.error?.code).toBe("INVALID_INPUT");
   });
 
   it.each(["/ai/plans/preview", "/ai/plans/approve", "/ai/plans/execute"])("rejects customer access to %s", async (path) => {
