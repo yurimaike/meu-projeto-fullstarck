@@ -140,6 +140,29 @@ describe("third-party-google-auth: start", () => {
     expect(gateway).not.toHaveBeenCalled();
   });
 
+  it.each([
+    ["HTTP URL", "http://accounts.google.com/o/oauth2/v2/auth"],
+    ["lookalike hostname", "https://accounts.google.com.attacker.example/auth"],
+    ["credentials in URL", "https://user:pass@accounts.google.com/auth"],
+    ["unexpected host", "https://attacker.example/auth"]
+  ])("rejects an unsafe gateway auth_url (%s)", async (_label, authUrl) => {
+    const gateway = stubGatewayStart({
+      body: { code: 0, message: "ok", data: { auth_url: authUrl, state: "st-1" } }
+    });
+
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/start", {
+        origin: "https://site.example",
+        landing_path: "/"
+      })
+    );
+
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("THIRD_PARTY_GOOGLE_AUTH_START_FAILED");
+    expect(gateway).toHaveBeenCalledTimes(1);
+  });
+
   it("maps a gateway failure to 502 without leaking the flow", async () => {
     stubGatewayStart({ status: 500, body: { code: 1, message: "boom" } });
 
