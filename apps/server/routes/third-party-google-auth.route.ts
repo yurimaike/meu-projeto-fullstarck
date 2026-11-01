@@ -125,7 +125,7 @@ function googleAuthError(error: unknown) {
   }
 
   if (error instanceof DatabaseError) {
-    return Response.json(apiFailure(error.code, error.message), { status: error.status === 503 ? 503 : 502 });
+    return Response.json(apiFailure(error.code, error.message), { status: error.status === 503 || error.status === 409 ? error.status : 502 });
   }
 
   throw error;
