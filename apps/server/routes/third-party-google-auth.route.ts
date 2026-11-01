@@ -12,6 +12,7 @@ import {
 import { DatabaseError } from "../_core/db";
 import { getAllowedOrigin } from "../_core/env";
 import { bodySizeLimit } from "../middlewares/body-size-limit";
+import { distributedRateLimit, ipRateLimitCounter } from "../middlewares/distributed-rate-limit";
 
 export const isPublic = true;
 
@@ -35,6 +36,16 @@ const VerifySchema = z.object({
 
 export const thirdPartyGoogleAuthRouter = new Hono();
 
+const startRateLimit = distributedRateLimit((c) => [
+  ipRateLimitCounter(c, "google-auth:start-ip", 10, 60)
+]);
+const callbackRateLimit = distributedRateLimit((c) => [
+  ipRateLimitCounter(c, "google-auth:callback-ip", 30, 60)
+]);
+const verifyRateLimit = distributedRateLimit((c) => [
+  ipRateLimitCounter(c, "google-auth:verify-ip", 60, 60)
+]);
+
 function parsedBody(c: import("hono").Context) {
   const raw = c.get("rawBody") as Uint8Array | undefined;
   if (!raw) return null;
@@ -45,7 +56,7 @@ thirdPartyGoogleAuthRouter.get("/config", (c) => {
   return c.json(apiSuccess({ enabled: isThirdPartyGoogleAuthConfigured() }));
 });
 
-thirdPartyGoogleAuthRouter.post("/start", bodySizeLimit, async (c) => {
+thirdPartyGoogleAuthRouter.post("/start", startRateLimit, bodySizeLimit, async (c) => {
   const parsed = StartSchema.safeParse(parsedBody(c) ?? {});
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid third-party Google auth start input"), 400);
@@ -68,7 +79,7 @@ thirdPartyGoogleAuthRouter.post("/start", bodySizeLimit, async (c) => {
   }
 });
 
-thirdPartyGoogleAuthRouter.post("/callback", bodySizeLimit, async (c) => {
+thirdPartyGoogleAuthRouter.post("/callback", callbackRateLimit, bodySizeLimit, async (c) => {
   const parsed = CallbackSchema.safeParse(parsedBody(c));
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid third-party Google auth callback input"), 400);
@@ -94,7 +105,7 @@ thirdPartyGoogleAuthRouter.post("/callback", bodySizeLimit, async (c) => {
   }
 });
 
-thirdPartyGoogleAuthRouter.post("/verify", bodySizeLimit, async (c) => {
+thirdPartyGoogleAuthRouter.post("/verify", verifyRateLimit, bodySizeLimit, async (c) => {
   const parsed = VerifySchema.safeParse(parsedBody(c));
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid third-party Google auth verification input"), 400);
