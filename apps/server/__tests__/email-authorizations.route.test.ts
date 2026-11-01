@@ -69,6 +69,24 @@ describe("admin email authorizations", () => {
 
     const oldSession = await fetchWithAuth(app, staff.token, "/api/email-authorizations");
     expect(oldSession.status).toBe(401);
+
+    // Revoked staff may still use the public customer booking flow as a guest.
+    const future = new Date();
+    future.setDate(future.getDate() + 30);
+    const bookingDate = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, "0")}-${String(future.getDate()).padStart(2, "0")}`;
+    const customerBooking = await app.fetch(new Request("http://localhost/api/bookings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        customerName: "Former staff customer",
+        customerEmail: "staff-revoke@example.com",
+        customerPhone: "51999999999",
+        bookingDate,
+        bookingTime: "11:00",
+        service: "Manicure e pedicure"
+      })
+    }));
+    expect(customerBooking.status).toBe(201);
   });
 
   it("does not let a normal account manage the authorisation list", async () => {
