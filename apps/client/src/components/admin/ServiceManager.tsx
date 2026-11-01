@@ -55,7 +55,7 @@ export default function ServiceManager() {
       });
       const payload = await response.json() as Payload<unknown>;
       if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível alterar o serviço.");
-      await load(); setNotice(Boolean(service.active) ? "Serviço desativado. O histórico foi preservado." : "Serviço reativado.");
+      await load(); setNotice(service.active === 1 ? "Serviço desativado. O histórico foi preservado." : "Serviço reativado.");
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao alterar serviço."); }
     finally { setBusy(false); }
   }
