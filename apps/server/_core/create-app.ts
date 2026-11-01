@@ -33,7 +33,7 @@ app.on(["GET", "POST"], "/api/auth/*", async (c) => {
   if (c.req.method === "POST" && new URL(c.req.url).pathname === "/api/auth/sign-up/email") {
     const body = await c.req.raw.clone().json().catch(() => null) as { email?: unknown } | null;
     const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
-    if (!email || !/^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/.test(email)) {
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
       return c.json(apiFailure("INVALID_EMAIL", "Informe um e-mail válido."), 400);
     }
     const { executeSql } = await import("./db");
