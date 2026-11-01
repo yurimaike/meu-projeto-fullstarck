@@ -87,6 +87,21 @@ describe("admin email authorizations", () => {
       })
     }));
     expect(customerBooking.status).toBe(201);
+
+    // Re-authorising the same address restores future sign-in without
+    // resurrecting the old session that was revoked on dismissal.
+    const reauthorised = await fetchWithAuth(app, admin.token, "/api/email-authorizations", {
+      method: "POST",
+      body: JSON.stringify({ email: "staff-revoke@example.com" })
+    });
+    expect(reauthorised.status).toBe(201);
+    const newLogin = await app.fetch(new Request("http://localhost/api/auth/sign-in/email", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "http://localhost:3000" },
+      body: JSON.stringify({ email: "staff-revoke@example.com", password: "password1234" })
+    }));
+    expect(newLogin.status).toBe(200);
+    expect(newLogin.headers.get("set-auth-token")).toBeTruthy();
   });
 
   it("does not let a normal account manage the authorisation list", async () => {
