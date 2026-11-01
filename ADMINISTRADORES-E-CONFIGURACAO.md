@@ -2,14 +2,26 @@
 
 ## Administradores
 
-Os administradores devem criar as suas contas pela página `/auth`. Para proteger a privacidade, os e-mails administrativos não são publicados neste documento. Um operador autorizado deve executar o SQL de promoção usando os endereços aprovados, guardados fora do repositório público:
+O cadastro em `/auth` exige que o e-mail já esteja na lista `authorized_emails`. Por isso, a configuração inicial de cada administrador deve ser feita por um operador com acesso seguro ao banco, antes de a pessoa criar a conta:
 
-```sql
--- Substitua pelos e-mails administrativos autorizados, fora do repositório público.
-UPDATE user SET role = 'admin' WHERE lower(email) IN ('admin1@example.com', 'admin2@example.com');
-```
+1. Aplique as migrations do servidor, incluindo `002_authorized_emails.sql`.
+2. Insira os e-mails administrativos aprovados na lista de autorização. Substitua os exemplos abaixo por endereços reais, fora do repositório público:
+   ```sql
+   INSERT INTO authorized_emails (email, createdBy, createdAt)
+   VALUES
+     ('admin1@example.com', 'bootstrap', unixepoch()),
+     ('admin2@example.com', 'bootstrap', unixepoch())
+   ON CONFLICT(email) DO NOTHING;
+   ```
+3. Cada administrador cria a própria conta pela página `/auth`, usando exatamente o e-mail autorizado.
+4. Depois de confirmar que as contas existem, o operador promove-as para administradoras:
+   ```sql
+   UPDATE user SET role = 'admin'
+   WHERE lower(email) IN ('admin1@example.com', 'admin2@example.com');
+   ```
+5. Confirme que os administradores conseguem entrar em `/admin`.
 
-As contas autorizadas recebem permissões equivalentes no painel `/admin`. Não existe cadastro público de administradores e não se deve compartilhar senhas.
+Apenas contas autorizadas podem criar conta e iniciar sessão. Apenas utilizadores com papel `admin` podem gerir a lista de e-mails autorizados. Guarde os endereços administrativos e o acesso ao banco em local privado; não publique credenciais nem compartilhe senhas.
 
 ## Reservas
 
