@@ -23,8 +23,8 @@ export default function CommercialAIChat() {
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, open]);
-  async function sendMessage() {
-    const text = input.trim();
+  async function sendMessage(messageText = input) {
+    const text = messageText.trim();
     if (!text || loading) return;
 
     const nextMessages: ChatMessage[] = [
@@ -119,22 +119,25 @@ export default function CommercialAIChat() {
               </div>
             )}
 
-            <div className="commercial-ai-quick-actions">
-              {quickActions.map((action, index) => (
-                <button
-                  key={index}
-                  type="button"
-                  className="commercial-ai-quick-btn"
-                  onClick={() => {
-                    setInput(action.value);
-                    void sendMessage();
-                  }}
-                >
-                  <MessageCircle size={14} />
-                  {action.label}
-                </button>
-              ))}
-            </div>
+            {messages.length === 0 && (
+              <div className="commercial-ai-quick-actions">
+                {quickActions.map((action) => (
+                  <button
+                    key={action.value}
+                    type="button"
+                    className="commercial-ai-quick-btn"
+                    disabled={loading}
+                    onClick={() => {
+                      setInput(action.value);
+                      void sendMessage(action.value);
+                    }}
+                  >
+                    <MessageCircle size={14} />
+                    {action.label}
+                  </button>
+                ))}
+              </div>
+            )}
 
             {messages.map((message, index) => (
               <div
