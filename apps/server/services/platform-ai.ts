@@ -1,9 +1,7 @@
 import { env } from "../_core/env";
 
-const CHAT_COMPLETIONS_PATH = "/skycowork_llm/v1/proxy/chat/completions";
-const IMAGE_GENERATIONS_PATH = "/skycowork_llm/v1/proxy/images/generations";
+const GEMINI_MODEL = "gemini-2.5-flash";
 const REQUEST_TIMEOUT_MS = 60_000;
-const IMAGE_REQUEST_TIMEOUT_MS = 120_000;
 
 export type PlatformAIMessage = {
   role: "system" | "user" | "assistant";
@@ -32,7 +30,8 @@ export type PlatformAIErrorCode =
   | "PLATFORM_AI_NOT_CONFIGURED"
   | "PLATFORM_AI_UPSTREAM_ERROR"
   | "PLATFORM_AI_REQUEST_FAILED"
-  | "PLATFORM_AI_INVALID_RESPONSE";
+  | "PLATFORM_AI_INVALID_RESPONSE"
+  | "PLATFORM_AI_IMAGE_UNSUPPORTED";
 
 export class PlatformAIError extends Error {
   constructor(
@@ -45,127 +44,123 @@ export class PlatformAIError extends Error {
   }
 }
 
-type ChatCompletionResponse = {
-  choices?: Array<{
-    message?: {
-      content?: unknown;
-    };
-  }>;
-};
+type GeminiPart = { text: string } | { fileData: { mimeType: string; fileUri: string } };
+type GeminiContent = { role: "user" | "model"; parts: GeminiPart[] };
 
-type ImageGenerationResponse = {
-  data?: Array<{
-    url?: unknown;
-  }>;
-};
-
-function platformAIUrl(path: string) {
-  const baseUrl = env.SKYWORK_AI_BASE_URL.trim().replace(/\/+$/, "");
-  if (!baseUrl || !env.SKYWORK_API_TOKEN) {
-    throw new PlatformAIError("PLATFORM_AI_NOT_CONFIGURED", "Platform AI is not configured", 500);
-  }
-
-  return `${baseUrl}${path}`;
+function messageText(content: PlatformAIMessage["content"]): string {
+  if (typeof content === "string") return content;
+  return content.map((part) => part.type === "text" ? part.text : "[Imagem anexada]").join("\n");
 }
 
-async function requestPlatformAIResponse(input: PlatformAIChatInput, stream: boolean) {
-  const url = platformAIUrl(CHAT_COMPLETIONS_PATH);
+function toGeminiRequest(input: PlatformAIChatInput) {
+  const systemMessages = input.messages.filter((message) => message.role === "system");
+  const conversation = input.messages.filter((message) => message.role !== "system");
+  const contents: GeminiContent[] = conversation.map((message) => ({
+    role: message.role === "assistant" ? "model" : "user",
+    parts: [{ text: messageText(message.content) }]
+  }));
+
+  return {
+    ...(systemMessages.length
+      ? { systemInstruction: { parts: [{ text: systemMessages.map((message) => messageText(message.content)).join("\n\n") }] } }
+      : {}),
+    contents,
+    generationConfig: { maxOutputTokens: input.maxOutputTokens ?? 2048, temperature: 0.7 }
+  };
+}
+
+function geminiUrl(stream: boolean) {
+  if (!env.GEMINI_API_KEY) {
+    throw new PlatformAIError("PLATFORM_AI_NOT_CONFIGURED", "Configure GEMINI_API_KEY no ambiente do servidor.", 500);
+  }
+  const action = stream ? "streamGenerateContent?alt=sse" : "generateContent";
+  return `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:${action}&key=${encodeURIComponent(env.GEMINI_API_KEY)}`.replace(":generateContent&", ":generateContent?");
+}
+
+async function requestGemini(input: PlatformAIChatInput, stream: boolean) {
   let response: Response;
   try {
-    response = await fetch(url, {
+    response = await fetch(geminiUrl(stream), {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Skywork-Api-Token": env.SKYWORK_API_TOKEN,
-        "x-skywork-billing-source": "skybot",
-        "X-Skywork-Scene": input.sceneKey
-      },
-      body: JSON.stringify({
-        messages: input.messages,
-        stream,
-        max_tokens: input.maxOutputTokens ?? 2048
-      }),
-      signal: stream ? undefined : AbortSignal.timeout(REQUEST_TIMEOUT_MS)
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(toGeminiRequest(input)),
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
   } catch {
-    throw new PlatformAIError("PLATFORM_AI_REQUEST_FAILED", "AI request failed", 502);
+    throw new PlatformAIError("PLATFORM_AI_REQUEST_FAILED", "Falha ao conectar ao Gemini.", 502);
   }
 
   if (!response.ok) {
+    const detail = await response.text().catch(() => "");
     throw new PlatformAIError(
       "PLATFORM_AI_UPSTREAM_ERROR",
-      "The AI service is temporarily unavailable",
+      detail.includes("API_KEY_INVALID") ? "A chave GEMINI_API_KEY é inválida." : "O Gemini está temporariamente indisponível. Verifique a chave e a cota da API.",
       502
     );
   }
-
   return response;
 }
 
 export async function requestPlatformAIChat(input: PlatformAIChatInput) {
-  const response = await requestPlatformAIResponse(input, false);
-
-  let data: ChatCompletionResponse;
+  const response = await requestGemini(input, false);
+  let data: {
+    candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
+  };
   try {
-    data = (await response.json()) as ChatCompletionResponse;
+    data = await response.json() as typeof data;
   } catch {
-    throw new PlatformAIError("PLATFORM_AI_INVALID_RESPONSE", "AI response was invalid", 502);
+    throw new PlatformAIError("PLATFORM_AI_INVALID_RESPONSE", "A resposta do Gemini é inválida.", 502);
   }
-
-  const reply = data.choices?.[0]?.message?.content;
-  return { reply: typeof reply === "string" ? reply : "" };
+  const reply = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
+  return { reply };
 }
 
 export async function requestPlatformAIChatStream(input: PlatformAIChatInput) {
-  const response = await requestPlatformAIResponse(input, true);
-  if (!response.body) {
-    throw new PlatformAIError("PLATFORM_AI_INVALID_RESPONSE", "AI response was invalid", 502);
+  const upstream = await requestGemini(input, true);
+  if (!upstream.body) {
+    throw new PlatformAIError("PLATFORM_AI_INVALID_RESPONSE", "O Gemini não retornou um fluxo de resposta.", 502);
   }
-  return response;
+
+  const encoder = new TextEncoder();
+  const decoder = new TextDecoder();
+  let buffer = "";
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const reader = upstream.body!.getReader();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          buffer += decoder.decode(value, { stream: !done });
+          let boundary = buffer.match(/\r?\n\r?\n/);
+          while (boundary?.index !== undefined) {
+            const event = buffer.slice(0, boundary.index);
+            buffer = buffer.slice(boundary.index + boundary[0].length);
+            const data = event.split(/\r?\n/).find((line) => line.startsWith("data:"))?.slice(5).trim();
+            if (data) {
+              try {
+                const parsed = JSON.parse(data) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
+                const content = parsed.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("");
+                if (content) {
+                  controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`));
+                }
+              } catch { /* Ignore incomplete or non-content Gemini events. */ }
+            }
+            boundary = buffer.match(/\r?\n\r?\n/);
+          }
+          if (done) break;
+        }
+        controller.enqueue(encoder.encode("data: [DONE]\n\n"));
+        controller.close();
+      } catch (error) {
+        controller.error(error);
+      } finally {
+        reader.releaseLock();
+      }
+    }
+  });
+  return new Response(stream, { headers: { "Content-Type": "text/event-stream; charset=utf-8", "Cache-Control": "no-cache" } });
 }
 
-export async function requestPlatformAIImage(input: PlatformAIImageInput) {
-  const url = platformAIUrl(IMAGE_GENERATIONS_PATH);
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Skywork-Api-Token": env.SKYWORK_API_TOKEN,
-        "x-skywork-billing-source": "skybot",
-        "X-Skywork-Scene": input.sceneKey
-      },
-      body: JSON.stringify({
-        prompt: input.prompt,
-        n: input.n ?? 1,
-        size: input.size ?? "1024x1024"
-      }),
-      signal: AbortSignal.timeout(IMAGE_REQUEST_TIMEOUT_MS)
-    });
-  } catch {
-    throw new PlatformAIError("PLATFORM_AI_REQUEST_FAILED", "AI image request failed", 502);
-  }
-
-  if (!response.ok) {
-    throw new PlatformAIError(
-      "PLATFORM_AI_UPSTREAM_ERROR",
-      "The AI service is temporarily unavailable",
-      502
-    );
-  }
-
-  let data: ImageGenerationResponse;
-  try {
-    data = (await response.json()) as ImageGenerationResponse;
-  } catch {
-    throw new PlatformAIError("PLATFORM_AI_INVALID_RESPONSE", "AI image response was invalid", 502);
-  }
-
-  const urlValue = data.data?.[0]?.url;
-  if (typeof urlValue !== "string" || !urlValue.trim()) {
-    throw new PlatformAIError("PLATFORM_AI_INVALID_RESPONSE", "AI image response was invalid", 502);
-  }
-
-  return { url: urlValue };
+export async function requestPlatformAIImage(_input: PlatformAIImageInput) {
+  throw new PlatformAIError("PLATFORM_AI_IMAGE_UNSUPPORTED", "A geração de imagens não está configurada para o Gemini neste projeto.", 502);
 }
