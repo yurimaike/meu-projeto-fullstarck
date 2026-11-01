@@ -45,6 +45,32 @@ describe("admin email authorizations", () => {
     expect(await listed.json()).toMatchObject({ ok: true, data: { emails: [{ email: "family.member@example.com" }] } });
   });
 
+  it("revoking an email blocks password login and previously issued API sessions", async () => {
+    const admin = await signUpAndGetToken(app, { email: "admin-revoke@example.com" });
+    await executeSql("UPDATE user SET role = 'admin' WHERE id = ?", [admin.userId!]);
+    const staff = await signUpAndGetToken(app, { email: "staff-revoke@example.com" });
+
+    const removed = await fetchWithAuth(
+      app,
+      admin.token,
+      "/api/email-authorizations/staff-revoke%40example.com",
+      { method: "DELETE" }
+    );
+    expect(removed.status).toBe(200);
+
+    const login = await app.fetch(new Request("http://localhost/api/auth/sign-in/email", {
+      method: "POST",
+      headers: { "content-type": "application/json", origin: "http://localhost:3000" },
+      body: JSON.stringify({ email: "staff-revoke@example.com", password: "password1234" })
+    }));
+    expect(login.status).toBe(403);
+    const loginBody = await login.json() as { error?: { code?: string } };
+    expect(loginBody.error?.code).toBe("EMAIL_NOT_AUTHORIZED");
+
+    const oldSession = await fetchWithAuth(app, staff.token, "/api/email-authorizations");
+    expect(oldSession.status).toBe(401);
+  });
+
   it("does not let a normal account manage the authorisation list", async () => {
     const user = await signUpAndGetToken(app, { email: "regular-user@example.com" });
     const response = await fetchWithAuth(app, user.token, "/api/email-authorizations", {
