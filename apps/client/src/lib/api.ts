@@ -126,7 +126,14 @@ export async function* streamPlatformAI(input: PlatformAIChatInput): AsyncGenera
   });
 
   if (!response.ok || !response.body) {
-    throw new Error("AI stream request failed");
+    let message = "Não foi possível conectar ao assistente.";
+    try {
+      const payload = await response.json() as ApiResponse<unknown>;
+      if (!payload.ok && payload.error?.message) message = payload.error.message;
+    } catch {
+      // Keep the safe fallback when the server does not return JSON.
+    }
+    throw new Error(message);
   }
 
   const reader = response.body.getReader();
