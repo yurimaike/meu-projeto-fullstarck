@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CalendarDays, Check, Clock3, Mail, Phone, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { AdminGuard } from "@/components/auth/AdminGuard";
@@ -78,7 +78,7 @@ function AdminContent() {
     }
   }
 
-  async function addAuthorisedEmail(event: React.FormEvent<HTMLFormElement>) {
+  async function addAuthorisedEmail(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const email = authorisedEmailInput.trim().toLowerCase();
     if (!email) return;
