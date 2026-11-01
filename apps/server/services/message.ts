@@ -65,7 +65,8 @@ export async function sendEmailVerificationCode(input: SendEmailInput) {
           <p>Se você não solicitou este código, ignore esta mensagem.</p>
         </div>
       `
-    })
+    }),
+    signal: AbortSignal.timeout(10_000)
   });
 
   let responseBody: { id?: string; message?: string } | null = null;
@@ -186,7 +187,8 @@ export async function sendPasswordResetEmail(input: SendPasswordResetEmailInput)
           <p>Se você não solicitou a recuperação, ignore este e-mail.</p>
         </div>
       `
-    })
+    }),
+    signal: AbortSignal.timeout(10_000)
   });
 
   let responseBody: { id?: string; message?: string } | null = null;
