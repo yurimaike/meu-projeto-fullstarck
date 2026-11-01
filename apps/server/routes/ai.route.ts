@@ -79,6 +79,28 @@ function canonicalPlan(plan: z.infer<typeof EditPlanSchema>) {
   });
 }
 
+function isSafePlanPath(filePath: string) {
+  // The editor is limited to frontend source and public assets. Server code,
+  // deployment settings, dependency manifests, migrations and hidden files
+  // stay outside the AI editor's write boundary.
+  if (
+    filePath.startsWith("/") ||
+    filePath.includes("\\\\") ||
+    filePath.split("/").some((part) => !part || part === "." || part === ".." || part.startsWith("."))
+  ) return false;
+
+  const allowedRoot = filePath.startsWith("apps/client/src/") || filePath.startsWith("apps/client/public/");
+  if (!allowedRoot) return false;
+
+  const lowerPath = filePath.toLowerCase();
+  const blocked = [
+    ".env", "secret", "credential", "token", "auth", "payment",
+    "migration", "database", "drizzle", "package.json", "lock",
+    "vite.config", "wrangler", "cloudflare", "render", "worker"
+  ];
+  return !blocked.some((term) => lowerPath.includes(term));
+}
+
 function planDigest(plan: z.infer<typeof EditPlanSchema>) {
   return createHash("sha256").update(canonicalPlan(plan)).digest("hex");
 }
@@ -182,6 +204,9 @@ const planPreviewHandler = async (c: Context) => {
   const paths = parsed.data.files.map((file) => file.path);
   if (new Set(paths).size !== paths.length) {
     return c.json(apiFailure("INVALID_INPUT", "Duplicate file paths are not allowed"), 400);
+  }
+  if (paths.some((filePath) => !isSafePlanPath(filePath))) {
+    return c.json(apiFailure("UNSAFE_FILE_PATH", "The plan includes a path outside the permitted frontend editing area"), 400);
   }
   return c.json(apiSuccess({ plan: parsed.data, plan_hash: planDigest(parsed.data), approval_required: true }), 200);
 };
