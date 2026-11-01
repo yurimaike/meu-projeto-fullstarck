@@ -15,6 +15,15 @@ Evoluir o chat privado Letícia AI para que a administradora possa pedir altera�
 7. Depois da autorização, o servidor cria uma branch própria, aplica apenas os ficheiros aprovados e abre um Pull Request para revisão.
 8. O site não é publicado automaticamente. A publicação depende da revisão e integração do Pull Request.
 
+## Separação entre assistente administrativo e atendimento ao cliente
+
+- O componente Letícia AI deve permanecer montado exclusivamente dentro da página administrativa protegida por `AdminGuard`.
+- Não importar nem renderizar Letícia AI em layouts, páginas ou componentes públicos/da área da cliente.
+- Todas as rotas do assistente administrativo devem aplicar `adminRoute` no servidor, inclusive chat, planeamento, aprovação, execução e geração de imagens.
+- O assistente comercial público é um produto separado: não pode receber ferramentas de edição, acesso ao GitHub, contexto administrativo, dados privados ou permissões de escrita.
+- A proteção visual do frontend é apenas uma camada de interface; a autorização decisiva é sempre a verificação de papel administrativo no backend.
+- Testes automatizados devem confirmar que utilizadores anónimos recebem 401 e clientes autenticados recebem 403, inclusive nas rotas de chat e imagens.
+
 ## Segurança obrigatória
 
 - A autorização tem de ser validada no servidor; esconder o chat no frontend não é controlo de acesso suficiente.
