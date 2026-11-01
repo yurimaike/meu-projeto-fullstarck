@@ -60,6 +60,14 @@ export default function SiteLayout({ children, title, description }: SiteLayoutP
               </NavLink>
             ))}
           </nav>
+          <NavLink
+            to="/admin"
+            className={({ isActive }: { isActive: boolean }) =>
+              isActive ? "nav-link is-active" : "nav-link"
+            }
+          >
+            Admin
+          </NavLink>
           <a className="header-cta" href={whatsappLink("Olá, Leticia! Gostaria de agendar um horário.")} target="_blank" rel="noreferrer">
             <MessageCircle size={16} />
             WhatsApp
