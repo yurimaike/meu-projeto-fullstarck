@@ -2,7 +2,7 @@
 
 ## Painel administrativo
 
-Os dois utilizadores devem existir primeiro por meio do cadastro normal do sistema. Depois, no banco SQLite/LibSQL de produção, atribua o papel de administrador aos dois e-mails:
+As contas administrativas devem existir primeiro por meio do cadastro normal. Por privacidade, não publique os e-mails reais dos administradores. No banco SQLite/LibSQL de produção, um operador autorizado deve substituir os endereços de exemplo abaixo pelos endereços aprovados, sem guardar os reais neste documento público:
 
 ```sql
 UPDATE user SET role = 'admin' WHERE lower(email) IN (
@@ -15,7 +15,7 @@ Confirme que as duas contas foram encontradas:
 
 ```sql
 SELECT id, name, email, role FROM user
-WHERE lower(email) IN ('yurimaike123@gmail.com', 'leticia.silvalb.11296@gmail.com');
+WHERE lower(email) IN ('admin1@example.com', 'admin2@example.com');
 ```
 
 Se uma conta ainda não existir, ela precisa criar a conta primeiro; depois execute novamente o UPDATE. Não compartilhe senhas no código ou neste arquivo.
