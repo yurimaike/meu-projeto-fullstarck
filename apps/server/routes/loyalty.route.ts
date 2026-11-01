@@ -99,6 +99,19 @@ loyaltyRouter.patch("/settings", adminRoute, async (c) => {
   } catch (error) { return fail(c, error); }
 });
 
+loyaltyRouter.delete("/rewards/:id", adminRoute, async (c) => {
+  try {
+    const current = await executeSql("SELECT status,expiresAt FROM loyalty_rewards WHERE id=?", [c.req.param("id")]);
+    const reward = current.rows[0];
+    if (!reward) return c.json(apiFailure("REWARD_NOT_FOUND", "Bônus não encontrado."), 404);
+    if (String(reward.status) !== "earned" || !reward.expiresAt || new Date(String(reward.expiresAt)).getTime() >= Date.now()) {
+      return c.json(apiFailure("REWARD_NOT_EXPIRED", "Somente bônus vencidos e ainda não utilizados podem ser apagados."), 409);
+    }
+    await executeSql("DELETE FROM loyalty_rewards WHERE id=?", [c.req.param("id")]);
+    return c.json(apiSuccess({ deleted: true }));
+  } catch (error) { return fail(c, error); }
+});
+
 loyaltyRouter.patch("/rewards/:id/validity", adminRoute, async (c) => {
   const parsed = validitySchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Informe a validade entre 1 e 60 meses."), 400);
