@@ -8,6 +8,7 @@ import { protectedRoute } from "../_core/route-helpers";
 import { user as userTable, verification } from "../db/schema";
 import { sendEmailVerificationCode } from "../services/message";
 import { distributedRateLimit, identityRateLimitCounter, ipRateLimitCounter } from "../middlewares/distributed-rate-limit";
+import { bodySizeLimit } from "../middlewares/body-size-limit";
 
 const CODE_TTL_MINUTES = 10;
 const RESEND_COOLDOWN_SECONDS = 60;
@@ -66,7 +67,7 @@ function decodeVerificationValue(raw: string): VerificationValue {
   return { code: raw, attempts: 0 };
 }
 
-emailVerificationRouter.post("/send-code", protectedRoute, sendCodeRateLimit, async (c) => {
+emailVerificationRouter.post("/send-code", protectedRoute, sendCodeRateLimit, bodySizeLimit, async (c) => {
   const user = c.var.currentUser;
 
   if (user.emailVerified) {
@@ -119,7 +120,7 @@ emailVerificationRouter.post("/send-code", protectedRoute, sendCodeRateLimit, as
   return c.json(apiSuccess({ sent: true, expiresInMinutes: CODE_TTL_MINUTES }), 200);
 });
 
-emailVerificationRouter.post("/verify-code", protectedRoute, verifyCodeRateLimit, async (c) => {
+emailVerificationRouter.post("/verify-code", protectedRoute, verifyCodeRateLimit, bodySizeLimit, async (c) => {
   const user = c.var.currentUser;
 
   const parsed = VerifyCodeSchema.safeParse(await c.req.json().catch(() => null));
