@@ -92,11 +92,25 @@ async function requestGemini(input: PlatformAIChatInput, stream: boolean) {
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
-    throw new PlatformAIError(
-      "PLATFORM_AI_UPSTREAM_ERROR",
-      detail.includes("API_KEY_INVALID") ? "A chave GEMINI_API_KEY é inválida." : "O Gemini está temporariamente indisponível. Verifique a chave e a cota da API.",
-      502
-    );
+    // Keep the provider response in server logs for diagnosis, but never log the
+    // request URL because it contains the private API key.
+    console.error("[PlatformAI] Gemini request failed", {
+      status: response.status,
+      model: GEMINI_MODEL,
+      stream,
+      detail: detail.slice(0, 2000)
+    });
+    const isInvalidKey = detail.includes("API_KEY_INVALID");
+    const message = isInvalidKey
+      ? "A chave GEMINI_API_KEY foi rejeitada pelo Google. Confira a variável no Render."
+      : response.status === 404
+        ? "O Google não encontrou o modelo Gemini configurado. Confira o nome do modelo."
+        : response.status === 429
+          ? "O limite ou a cota da API Gemini foi atingido. Confira o uso no Google AI Studio."
+          : response.status === 403
+            ? "O Google negou o acesso à API Gemini. Confira as permissões e o faturamento do projeto."
+            : "O Gemini recusou a solicitação. Consulte os Logs do Render para ver o código e o motivo.";
+    throw new PlatformAIError("PLATFORM_AI_UPSTREAM_ERROR", message, 502);
   }
   return response;
 }
