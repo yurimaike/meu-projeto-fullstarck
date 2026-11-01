@@ -64,4 +64,18 @@ describe("bookings route", () => {
     const list = await app.fetch(new Request(`http://localhost/api/bookings?date=${date}`));
     expect(((await list.json()) as { data: { busyTimes: string[] } }).data.busyTimes).not.toContain("14:30");
   });
+  it("rejects oversized public booking request bodies before processing", async () => {
+    const body = JSON.stringify({ payload: "x".repeat(50_000) });
+    const res = await app.fetch(new Request("http://localhost/api/bookings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body
+    }));
+
+    expect(new TextEncoder().encode(body).byteLength).toBeGreaterThan(50_000);
+    expect(res.status).toBe(413);
+    const payload = await res.json() as { error?: { code?: string } };
+    expect(payload.error?.code).toBe("PAYLOAD_TOO_LARGE");
+  });
+
 });
