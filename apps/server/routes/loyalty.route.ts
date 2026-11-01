@@ -4,6 +4,7 @@ import { z } from "zod";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
 import { adminRoute } from "../_core/route-helpers";
 import { DatabaseError, executeSql } from "../_core/db";
+import { BOOKING_SERVICES } from "../services/bookings";
 
 export const loyaltyRouter = new Hono();
 const paymentSchema = z.object({ paid: z.boolean() });
@@ -17,6 +18,8 @@ function fail(c: any, error: unknown) {
 }
 
 async function syncEarnedReward(email: string, name: string) {
+  const setting = await executeSql("SELECT enabled FROM loyalty_settings WHERE id=1");
+  if (!Number(setting.rows[0]?.enabled ?? 0)) return;
   const normalized = email.trim().toLowerCase();
   const countResult = await executeSql(
     "SELECT COUNT(*) AS total FROM bookings WHERE lower(customerEmail)=? AND paymentStatus='paid' AND completedAt IS NOT NULL AND status IN ('confirmed','completed')",
@@ -63,7 +66,7 @@ loyaltyRouter.patch("/bookings/:id/completion", adminRoute, async (c) => {
   } catch (error) { return fail(c, error); }
 });
 
-loyaltyRouter.get("/loyalty/admin", adminRoute, async (c) => {
+loyaltyRouter.get("/admin", adminRoute, async (c) => {
   try {
     const [settings, rewards, customers] = await Promise.all([
       executeSql("SELECT enabled,updatedAt FROM loyalty_settings WHERE id=1"),
@@ -74,7 +77,7 @@ loyaltyRouter.get("/loyalty/admin", adminRoute, async (c) => {
   } catch (error) { return fail(c, error); }
 });
 
-loyaltyRouter.patch("/loyalty/settings", adminRoute, async (c) => {
+loyaltyRouter.patch("/settings", adminRoute, async (c) => {
   const parsed = settingsSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Configuração inválida."), 400);
   try {
@@ -83,10 +86,13 @@ loyaltyRouter.patch("/loyalty/settings", adminRoute, async (c) => {
   } catch (error) { return fail(c, error); }
 });
 
-loyaltyRouter.post("/loyalty/rewards/:id/redeem", adminRoute, async (c) => {
+loyaltyRouter.post("/rewards/:id/redeem", adminRoute, async (c) => {
   const parsed = redeemSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Informe a reserva e o serviço escolhido para o bônus."), 400);
   try {
+    const setting = await executeSql("SELECT enabled FROM loyalty_settings WHERE id=1");
+    if (!Number(setting.rows[0]?.enabled ?? 0)) return c.json(apiFailure("LOYALTY_DISABLED", "O programa de fidelidade está desativado."), 409);
+    if (!BOOKING_SERVICES.includes(parsed.data.service as typeof BOOKING_SERVICES[number])) return c.json(apiFailure("INVALID_SERVICE", "Escolha um serviço cadastrado no salão."), 400);
     const rewardResult = await executeSql("SELECT customerEmail,status FROM loyalty_rewards WHERE id=?", [c.req.param("id")]);
     const reward = rewardResult.rows[0];
     if (!reward) return c.json(apiFailure("REWARD_NOT_FOUND", "Bônus não encontrado."), 404);
