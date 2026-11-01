@@ -128,6 +128,16 @@ function normalizeGoogleUser(googleUser: GoogleUser) {
     throw new ThirdPartyGoogleAuthError("THIRD_PARTY_GOOGLE_AUTH_INVALID_USER", "Google user is missing email", 400);
   }
 
+  const emailVerified =
+    booleanValue(googleUser.email_verified) ?? booleanValue(googleUser.emailVerified) ?? false;
+  if (!emailVerified) {
+    throw new ThirdPartyGoogleAuthError(
+      "THIRD_PARTY_GOOGLE_AUTH_EMAIL_NOT_VERIFIED",
+      "Google account email must be verified",
+      403
+    );
+  }
+
   const providerAccountId = stringValue(googleUser.sub) || stringValue(googleUser.id) || email;
   const name =
     stringValue(googleUser.name) ||
@@ -137,7 +147,7 @@ function normalizeGoogleUser(googleUser: GoogleUser) {
   return {
     providerAccountId,
     email,
-    emailVerified: booleanValue(googleUser.email_verified) ?? booleanValue(googleUser.emailVerified) ?? false,
+    emailVerified,
     name,
     image: stringValue(googleUser.picture) || stringValue(googleUser.avatar_url) || null
   };
