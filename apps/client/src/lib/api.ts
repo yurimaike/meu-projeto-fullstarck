@@ -118,8 +118,9 @@ function extractPlatformAIContent(data: string) {
 }
 
 export async function* streamPlatformAI(input: PlatformAIChatInput): AsyncGenerator<string> {
-  const response = await apiFetch("/ai", {
+  const response = await apiFetch("/commercial-assistant", {
     method: "POST",
+    auth: false,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...input, stream: true })
   });
