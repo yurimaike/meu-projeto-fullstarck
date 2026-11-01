@@ -25,7 +25,7 @@ export async function createBooking(input:BookingInput, verifiedUser?:{id:string
   }
   return { id, bookingCode, customerName:name, customerEmail:email, customerPhone:phone, bookingDate:input.bookingDate, bookingTime:input.bookingTime, service:input.service, status:"pending" as const };
 }
-export async function listBookings() { const r=await executeSql("SELECT id,bookingCode,customerName,customerEmail,customerPhone,bookingDate,bookingTime,service,status,createdAt,updatedAt,decidedAt,decisionNote FROM bookings ORDER BY bookingDate DESC, bookingTime DESC"); return r.rows; }
+export async function listBookings() { const r=await executeSql("SELECT id,bookingCode,customerName,customerEmail,customerPhone,bookingDate,bookingTime,service,status,createdAt,updatedAt,decidedAt,decisionNote,paymentStatus,paymentUpdatedAt,completedAt FROM bookings ORDER BY bookingDate DESC, bookingTime DESC"); return r.rows; }
 export async function listCustomerBookings(userId:string, verifiedEmail:string) {
   if (!userId || !verifiedEmail.trim()) throw new DatabaseError("INVALID_INPUT","Verified identity is required.",400);
   const normalizedEmail = verifiedEmail.trim().toLowerCase();
