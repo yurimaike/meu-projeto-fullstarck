@@ -70,6 +70,7 @@ async function hydrateUserFromDatabase(authUser: AuthUser | null): Promise<AuthU
   const rows = await getDb()
     .select({
       role: userTable.role,
+      email: userTable.email,
       emailVerified: userTable.emailVerified,
       username: userTable.username
     })
@@ -81,6 +82,17 @@ async function hydrateUserFromDatabase(authUser: AuthUser | null): Promise<AuthU
   // Fail closed: a valid auth session must still map to an existing database user.
   // Never trust a stale session role when the authoritative user row is missing.
   if (!row) {
+    return null;
+  }
+
+  // Enforce the current allowlist on every authenticated API request so
+  // removing an email immediately blocks already-issued sessions as well.
+  const { executeSql } = await import("../_core/db");
+  const authorization = await executeSql(
+    "SELECT email FROM authorized_emails WHERE email = ? LIMIT 1",
+    [row.email.trim().toLowerCase()]
+  );
+  if (authorization.rows.length === 0) {
     return null;
   }
 
