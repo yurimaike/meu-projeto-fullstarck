@@ -1,9 +1,10 @@
-import { randomInt } from "node:crypto";
+import { createHmac, randomInt, timingSafeEqual } from "node:crypto";
 import { Hono } from "hono";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
 import { getDb } from "../_core/db";
+import { env } from "../_core/env";
 import { protectedRoute } from "../_core/route-helpers";
 import { user as userTable, verification } from "../db/schema";
 import { sendEmailVerificationCode } from "../services/message";
@@ -42,9 +43,27 @@ function requestLocale(c: { req: { header: (name: string) => string | undefined 
 }
 
 type VerificationValue = {
-  code: string;
+  code?: string;
+  codeHash?: string;
   attempts: number;
 };
+
+function hashVerificationCode(code: string) {
+  return createHmac("sha256", env.BETTER_AUTH_SECRET)
+    .update(`email-verification-code:${code}`)
+    .digest("hex");
+}
+
+function matchesVerificationCode(stored: VerificationValue, candidate: string) {
+  if (stored.codeHash) {
+    const expected = Buffer.from(stored.codeHash, "hex");
+    const actual = Buffer.from(hashVerificationCode(candidate), "hex");
+    return expected.length === actual.length && timingSafeEqual(expected, actual);
+  }
+
+  // Temporary compatibility for codes created before hash-only storage.
+  return typeof stored.code === "string" && stored.code === candidate;
+}
 
 function encodeVerificationValue(value: VerificationValue) {
   return JSON.stringify(value);
@@ -53,10 +72,11 @@ function encodeVerificationValue(value: VerificationValue) {
 function decodeVerificationValue(raw: string): VerificationValue {
   try {
     const parsed = JSON.parse(raw) as Partial<VerificationValue>;
-    if (typeof parsed.code === "string") {
+    if (typeof parsed.code === "string" || typeof parsed.codeHash === "string") {
       const attempts = parsed.attempts;
       return {
-        code: parsed.code,
+        ...(typeof parsed.code === "string" ? { code: parsed.code } : {}),
+        ...(typeof parsed.codeHash === "string" ? { codeHash: parsed.codeHash } : {}),
         attempts: typeof attempts === "number" && Number.isInteger(attempts) && attempts >= 0 ? attempts : 0
       };
     }
@@ -98,7 +118,7 @@ emailVerificationRouter.post("/send-code", protectedRoute, sendCodeRateLimit, bo
   await getDb().insert(verification).values({
     id: crypto.randomUUID(),
     identifier,
-    value: encodeVerificationValue({ code, attempts: 0 }),
+    value: encodeVerificationValue({ codeHash: hashVerificationCode(code), attempts: 0 }),
     expiresAt: new Date(expiresAt),
     createdAt: new Date(now),
     updatedAt: new Date(now)
@@ -143,7 +163,7 @@ emailVerificationRouter.post("/verify-code", protectedRoute, verifyCodeRateLimit
     return c.json(apiFailure("CODE_EXPIRED", "Verification code has expired"), 400);
   }
 
-  if (stored.code !== parsed.data.code) {
+  if (!matchesVerificationCode(stored, parsed.data.code)) {
     const attempts = stored.attempts + 1;
     if (attempts >= MAX_VERIFY_ATTEMPTS) {
       await getDb().delete(verification).where(eq(verification.identifier, identifier));
@@ -153,7 +173,7 @@ emailVerificationRouter.post("/verify-code", protectedRoute, verifyCodeRateLimit
     await getDb()
       .update(verification)
       .set({
-        value: encodeVerificationValue({ code: stored.code, attempts }),
+        value: encodeVerificationValue({ ...(stored.codeHash ? { codeHash: stored.codeHash } : { code: stored.code }), attempts }),
         updatedAt: new Date()
       })
       .where(eq(verification.identifier, identifier));
