@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import { apiFailure } from "@repo/shared/http";
 import { getAuth, toAuthSession, toAuthUser, type AuthSession, type AuthUser } from "../_core/auth";
 import { DatabaseError, getDb } from "../_core/db";
+import { env } from "../_core/env";
 import { publicApiPrefixes } from "../_core/route-registry";
 import { user as userTable } from "../db/schema";
 
@@ -11,6 +12,24 @@ declare module "hono" {
     user: AuthUser | null;
     session: AuthSession | null;
   }
+}
+
+// Better Auth resolves the client IP from request headers. Preserve the
+// forwarded IP only when the deployment explicitly trusts Render's proxy.
+export function buildBetterAuthSessionHeaders(request: Request, trustForwardedClientIp: boolean): Headers {
+  const headers = new Headers();
+  const authorization = request.headers.get("Authorization");
+  const userAgent = request.headers.get("user-agent");
+
+  if (authorization) headers.set("Authorization", authorization);
+  if (userAgent) headers.set("user-agent", userAgent);
+
+  if (trustForwardedClientIp) {
+    const forwardedFor = request.headers.get("x-forwarded-for");
+    if (forwardedFor) headers.set("x-forwarded-for", forwardedFor);
+  }
+
+  return headers;
 }
 
 // Public prefixes are computed from the route registry: better-auth's prefix
@@ -42,9 +61,7 @@ export const withSession: MiddlewareHandler = async (c, next) => {
   let authSession: AuthSession | null;
   try {
     const betterAuthSession = await getAuth().api.getSession({
-      headers: new Headers({
-        Authorization: authorization
-      })
+      headers: buildBetterAuthSessionHeaders(c.req.raw, env.RATE_LIMIT_TRUST_RENDER_PROXY)
     });
     authUser = await hydrateUserFromDatabase(toAuthUser(betterAuthSession));
     authSession = toAuthSession(betterAuthSession);
