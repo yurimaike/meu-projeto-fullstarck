@@ -25,6 +25,14 @@ export async function createBooking(input:BookingInput, verifiedUser?:{id:string
   const userId = verifiedUser && verifiedUser.email.toLowerCase() === email ? verifiedUser.id : null;
   try { await executeSql("INSERT INTO bookings (id,bookingCode,customerName,customerEmail,customerPhone,bookingDate,bookingTime,service,status,userId,idempotencyKey,requestHash) VALUES (?,?,?,?,?,?,?,?, 'pending',?,?,?)",[id,bookingCode,name,email,phone,input.bookingDate,input.bookingTime,input.service,userId,idempotencyKey ?? null,idempotencyKey ? requestHash : null]); }
   catch(e) {
+    if (idempotencyKey) {
+      const retry = await executeSql("SELECT id,bookingCode,customerName,customerEmail,customerPhone,bookingDate,bookingTime,service,status,requestHash FROM bookings WHERE idempotencyKey = ? LIMIT 1", [idempotencyKey]);
+      const row = retry.rows[0];
+      if (row) {
+        if (String(row.requestHash) !== requestHash) throw new DatabaseError("IDEMPOTENCY_CONFLICT", "Esta solicitação já foi utilizada com dados diferentes.", 409);
+        return { id:String(row.id), bookingCode:String(row.bookingCode), customerName:String(row.customerName), customerEmail:String(row.customerEmail), customerPhone:String(row.customerPhone), bookingDate:String(row.bookingDate), bookingTime:String(row.bookingTime), service:String(row.service), status:String(row.status) };
+      }
+    }
     if (e instanceof DatabaseError && e.code === "SLOT_UNAVAILABLE") throw e;
     const msg = e instanceof DatabaseError ? e.databaseMessage : e instanceof Error ? e.message : "";
     if (/uq_bookings_active_slot|unique constraint failed:\s*bookings\.bookingDate,\s*bookings\.bookingTime/i.test(msg)) {
