@@ -1,4 +1,4 @@
-import { createAuthSessionRecord, upsertThirdPartyUser } from "../_core/db";
+import { createAuthSessionRecord, executeSql, upsertThirdPartyUser } from "../_core/db";
 import { env } from "../_core/env";
 
 const THIRD_PARTY_PROVIDER_ID = "skywork-google";
@@ -155,7 +155,17 @@ export async function verifySignedLoginToken(pathname: string, token: string, ts
   }
 
   const expected = await createSignature(pathname, token, ts);
-  return timingSafeEqual(signature, expected);
+  if (!timingSafeEqual(signature, expected)) {
+    return false;
+  }
+
+  // A valid HMAC alone is not enough: the associated session may have been
+  // revoked or expired since the landing URL was issued.
+  const activeSession = await executeSql(
+    "SELECT id FROM session WHERE token = ? AND expiresAt > ? LIMIT 1",
+    [token, Math.floor(Date.now() / 1000)]
+  );
+  return activeSession.rows.length > 0;
 }
 
 function normalizeGoogleUser(googleUser: GoogleUser) {
