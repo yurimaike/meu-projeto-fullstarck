@@ -1,6 +1,6 @@
 import { env } from "../_core/env";
 
-const GEMINI_MODEL = "gemini-3.8-flash";
+const GEMINI_MODEL = "gemini-3.5-flash-lite";
 const REQUEST_TIMEOUT_MS = 60_000;
 
 export type PlatformAIMessage = {
