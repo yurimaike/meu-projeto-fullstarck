@@ -121,6 +121,11 @@ export default function MyBookingsPage() {
           <p className="mt-4 max-w-2xl text-muted-foreground">
             Entre com uma conta cujo e-mail foi verificado ou confirme por código o endereço usado no agendamento.
           </p>
+          {isVerifiedAccount && (
+            <Link to="/meus-bonus" className="mt-6 inline-flex min-h-11 items-center rounded-full bg-[#705844] px-6 text-sm font-semibold text-white shadow-sm transition hover:bg-[#5f4938]">
+              Consultar meus bônus
+            </Link>
+          )}
 
           {!sessionPending && !isVerifiedAccount && guestBookings === null && (
             <section className="mt-8 rounded-2xl border border-border bg-card p-6 md:p-8">
