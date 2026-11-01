@@ -1,65 +1,57 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import { cleanup, render, screen, fireEvent } from "@testing-library/react";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import CommercialAIChat from "./CommercialAIChat";
 
-import { afterEach } from "vitest";
+const mocks = vi.hoisted(() => ({ streamPlatformAI: vi.fn() }));
+vi.mock("@/lib/api", () => ({ streamPlatformAI: mocks.streamPlatformAI }));
 
-afterEach(() => {
-  cleanup();
-});
+async function* streamText(value: string) {
+  yield value;
+}
 
-vi.mock("@/lib/api", () => ({
-  callPlatformAI: vi.fn()
-}));
-
-import { callPlatformAI } from "@/lib/api";
-
-const mockedCallPlatformAI = callPlatformAI as ReturnType<typeof vi.fn>;
+afterEach(cleanup);
 
 describe("CommercialAIChat", () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-  });
+  beforeEach(() => vi.clearAllMocks());
 
   it("renderiza o botão launcher e o painel ao abrir", () => {
     render(<CommercialAIChat />);
-    expect(screen.getByLabelText("Abrir Letícia Comercial")).not.toBeNull();
     fireEvent.click(screen.getByLabelText("Abrir Letícia Comercial"));
     expect(screen.getByLabelText("Assistente comercial Letícia")).not.toBeNull();
+    expect(screen.getByText(/Como posso ajudar você hoje/)).not.toBeNull();
   });
 
-  it("envia mensagem e recebe resposta", async () => {
-    mockedCallPlatformAI.mockResolvedValue("Olá! Como posso ajudar?");
+  it("envia mensagem e recebe resposta pelo streaming atual", async () => {
+    mocks.streamPlatformAI.mockReturnValue(streamText("Olá! Como posso ajudar?"));
     render(<CommercialAIChat />);
     fireEvent.click(screen.getByLabelText("Abrir Letícia Comercial"));
-    const input = screen.getByPlaceholderText("Escreva sua mensagem...");
-    fireEvent.change(input, { target: { value: "Olá" } });
+    fireEvent.change(screen.getByPlaceholderText("Escreva sua mensagem..."), { target: { value: "Olá" } });
     fireEvent.submit(screen.getByRole("button", { name: "Enviar mensagem" }).closest("form")!);
     expect(await screen.findByText("Olá! Como posso ajudar?")).not.toBeNull();
+    expect(mocks.streamPlatformAI).toHaveBeenCalledWith(expect.objectContaining({
+      scene_key: "commercial_chat",
+      messages: expect.arrayContaining([expect.objectContaining({ role: "user", content: "Olá" })])
+    }));
   });
 
-  it("bloqueia mensagem vazia", async () => {
+  it("bloqueia mensagem vazia", () => {
     render(<CommercialAIChat />);
     fireEvent.click(screen.getByLabelText("Abrir Letícia Comercial"));
-    const input = screen.getByPlaceholderText("Escreva sua mensagem...");
-    fireEvent.change(input, { target: { value: "" } });
     fireEvent.submit(screen.getByRole("button", { name: "Enviar mensagem" }).closest("form")!);
-    expect(mockedCallPlatformAI).not.toHaveBeenCalled();
+    expect(mocks.streamPlatformAI).not.toHaveBeenCalled();
   });
 
-  it("bloqueia mensagem acima de 2000 caracteres", async () => {
+  it("bloqueia mensagem acima de 2000 caracteres", () => {
     render(<CommercialAIChat />);
     fireEvent.click(screen.getByLabelText("Abrir Letícia Comercial"));
-    const input = screen.getByPlaceholderText("Escreva sua mensagem...");
-    const longMessage = "a".repeat(2001);
-    fireEvent.change(input, { target: { value: longMessage } });
+    fireEvent.change(screen.getByPlaceholderText("Escreva sua mensagem..."), { target: { value: "a".repeat(2001) } });
     fireEvent.submit(screen.getByRole("button", { name: "Enviar mensagem" }).closest("form")!);
-    expect(mockedCallPlatformAI).not.toHaveBeenCalled();
+    expect(mocks.streamPlatformAI).not.toHaveBeenCalled();
     expect(screen.getByText(/Sua mensagem está muito longa/)).not.toBeNull();
   });
 
-  it("desabilita input enquanto carrega", async () => {
-    mockedCallPlatformAI.mockReturnValue(new Promise(() => {}));
+  it("desabilita input enquanto carrega", () => {
+    mocks.streamPlatformAI.mockReturnValue(new Promise(() => {}));
     render(<CommercialAIChat />);
     fireEvent.click(screen.getByLabelText("Abrir Letícia Comercial"));
     const input = screen.getByPlaceholderText("Escreva sua mensagem...");
@@ -69,13 +61,14 @@ describe("CommercialAIChat", () => {
   });
 
   it("trata erro da IA com mensagem amigável", async () => {
-    mockedCallPlatformAI.mockRejectedValue(new Error("Falha na conexão"));
+    mocks.streamPlatformAI.mockImplementation(async function* () {
+      throw new Error("Falha na conexão");
+    });
     render(<CommercialAIChat />);
     fireEvent.click(screen.getByLabelText("Abrir Letícia Comercial"));
-    const input = screen.getByPlaceholderText("Escreva sua mensagem...");
-    fireEvent.change(input, { target: { value: "Olá" } });
+    fireEvent.change(screen.getByPlaceholderText("Escreva sua mensagem..."), { target: { value: "Olá" } });
     fireEvent.submit(screen.getByRole("button", { name: "Enviar mensagem" }).closest("form")!);
-    expect(await screen.findByText(/Não consegui conectar/)).not.toBeNull();
+    expect(await screen.findByText("Falha na conexão")).not.toBeNull();
   });
 
   it("não expõe scene_key no DOM", () => {
