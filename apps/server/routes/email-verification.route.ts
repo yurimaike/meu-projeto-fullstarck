@@ -175,8 +175,8 @@ emailVerificationRouter.post("/verify-code", protectedRoute, verifyCodeRateLimit
       attempts
     });
     const updateResult = await executeSql(
-      "UPDATE verification SET value = ?, updatedAt = ? WHERE id = ? AND value = ?",
-      [nextValue, Date.now(), row.id, row.value]
+      "UPDATE verification SET value = ? WHERE id = ? AND value = ?",
+      [nextValue, row.id, row.value]
     );
     if (updateResult.rowsAffected === 0) {
       return c.json(apiFailure("CODE_INVALID", "Verification code was already checked. Try again."), 409);
@@ -188,7 +188,7 @@ emailVerificationRouter.post("/verify-code", protectedRoute, verifyCodeRateLimit
   // request can claim a valid code; other rows for this identifier are untouched.
   const consumeResult = await executeSql(
     "DELETE FROM verification WHERE id = ? AND value = ? AND expiresAt >= ?",
-    [row.id, row.value, Date.now()]
+    [row.id, row.value, Math.floor(Date.now() / 1000)]
   );
   if (consumeResult.rowsAffected === 0) {
     return c.json(apiFailure("CODE_INVALID", "Verification code was already used or expired"), 409);
