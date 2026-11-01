@@ -23,7 +23,7 @@ export default function ServiceManager() {
 
   function startEdit(service:Service) {
     setEditing(service.id);
-    setForm({name:service.name,description:service.description ?? "",durationMinutes:service.durationMinutes,price:(service.priceCents/100).toFixed(2).replace(".",","),active:Boolean(service.active)});
+    setForm({name:service.name,description:service.description ?? "",durationMinutes:service.durationMinutes,price:(service.priceCents/100).toFixed(2).replace(".",","),active:service.active === 1});
     setError(""); setNotice("");
   }
   function reset() { setEditing(null); setForm(emptyForm); }
@@ -51,7 +51,7 @@ export default function ServiceManager() {
     try {
       const response = await apiFetch(`/services/${service.id}`, {
         method:"PATCH", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({name:service.name,description:service.description,durationMinutes:service.durationMinutes,priceCents:service.priceCents,active:!Boolean(service.active)})
+        body:JSON.stringify({name:service.name,description:service.description,durationMinutes:service.durationMinutes,priceCents:service.priceCents,active:service.active !== 1})
       });
       const payload = await response.json() as Payload<unknown>;
       if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível alterar o serviço.");
@@ -75,8 +75,8 @@ export default function ServiceManager() {
     </form>
     <div className="mt-5 grid gap-3">
       {services.map(service=><article key={service.id} className="flex flex-col gap-3 rounded-2xl border border-[#eaded3] p-4 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[#493629]">{service.name}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${service.active ? "bg-[#edf4ed] text-[#547357]" : "bg-[#f3efeb] text-[#806f62]"}`}>{service.active ? "Ativo" : "Inativo"}</span></div><p className="mt-1 text-sm text-[#705f51]">{money(service.priceCents)} · {service.durationMinutes} min</p>{service.description && <p className="mt-1 text-xs text-[#8c7767]">{service.description}</p>}</div>
-        <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={()=>startEdit(service)} className="rounded-full border border-[#d9c4b1] bg-white px-4 py-2 text-xs font-semibold text-[#705844]">Editar</button><button type="button" disabled={busy} onClick={()=>void toggleActive(service)} className="rounded-full border border-[#d9c4b1] bg-white px-4 py-2 text-xs font-semibold text-[#705844]">{service.active ? "Desativar" : "Reativar"}</button></div>
+        <div className="min-w-0"><div className="flex flex-wrap items-center gap-2"><h3 className="font-semibold text-[#493629]">{service.name}</h3><span className={`rounded-full px-2.5 py-1 text-xs font-semibold ${service.active ? "bg-[#edf4ed] text-[#547357]" : "bg-[#f3efeb] text-[#806f62]"}`}>{service.active === 1 ? "Ativo" : "Inativo"}</span></div><p className="mt-1 text-sm text-[#705f51]">{money(service.priceCents)} · {service.durationMinutes} min</p>{service.description && <p className="mt-1 text-xs text-[#8c7767]">{service.description}</p>}</div>
+        <div className="flex flex-wrap gap-2"><button type="button" disabled={busy} onClick={()=>startEdit(service)} className="rounded-full border border-[#d9c4b1] bg-white px-4 py-2 text-xs font-semibold text-[#705844]">Editar</button><button type="button" disabled={busy} onClick={()=>void toggleActive(service)} className="rounded-full border border-[#d9c4b1] bg-white px-4 py-2 text-xs font-semibold text-[#705844]">{service.active === 1 ? "Desativar" : "Reativar"}</button></div>
       </article>)}
       {services.length===0 && <p className="rounded-xl bg-[#fbf6f0] p-5 text-sm text-[#8c7767]">Nenhum serviço cadastrado ainda.</p>}
     </div>
