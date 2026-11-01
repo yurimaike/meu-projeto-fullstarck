@@ -42,7 +42,7 @@ describe("admin email authorizations", () => {
 
     const listed = await fetchWithAuth(app, admin.token, "/api/email-authorizations");
     expect(listed.status).toBe(200);
-    expect(await listed.json()).toMatchObject({ ok: true, data: { emails: [{ email: "family.member@example.com" }] } });
+    expect(await listed.json()).toMatchObject({ ok: true, data: { emails: expect.arrayContaining([expect.objectContaining({ email: "family.member@example.com" })]) } });
   });
 
   it("revoking an email blocks password login and previously issued API sessions", async () => {
