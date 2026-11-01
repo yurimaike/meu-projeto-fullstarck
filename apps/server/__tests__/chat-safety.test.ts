@@ -33,10 +33,10 @@ describe("chat safety", () => {
     expect(detectSeriousChatIncident([{ role: "user", content: "Você é uma vagabunda." }])).toBeNull();
   });
 
-  it("flags repeated targeted insults", () => {
+  it("flags two targeted insults when the latest message is also abusive", () => {
     const incident = detectSeriousChatIncident([
       { role: "user", content: "Sua vagabunda." },
-      { role: "user", content: "Sua vagabunda." },
+      { role: "user", content: "Não gostei do preço." },
       { role: "user", content: "Sua vagabunda." }
     ]);
     expect(incident?.severity).toBe("high");
