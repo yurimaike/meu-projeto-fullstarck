@@ -76,6 +76,14 @@ describe("admin AI access boundary", () => {
     expect(response.status).toBe(401);
   });
 
+
+  it("keeps GitHub execution disabled even for an administrator until the integration is ready", async () => {
+    const response = await createApp("admin").request("/ai/plans/execute", { method: "POST" });
+    expect(response.status).toBe(503);
+    const body = await response.json() as { error?: { code?: string } };
+    expect(body.error?.code).toBe("EDITOR_NOT_CONFIGURED");
+  });
+
   it.each(["/ai/plans/preview", "/ai/plans/approve", "/ai/plans/execute"])("rejects customer access to %s", async (path) => {
     const response = await createApp("user").request(path, { method: "POST" });
     expect(response.status).toBe(403);
