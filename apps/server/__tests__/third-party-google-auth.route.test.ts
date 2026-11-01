@@ -262,6 +262,19 @@ describe("third-party-google-auth: verify", () => {
     expect(await res.json()).toEqual({ ok: true, data: { ok: true } });
   });
 
+  it("rejects a correctly signed login token after its session is revoked", async () => {
+    const { path, token, ts, sig } = await completeCallback("/admin");
+    await executeSql("DELETE FROM session WHERE token = ?", [token]);
+
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/verify", { path, token, ts, sig })
+    );
+
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("INVALID_LOGIN_TOKEN");
+  });
+
   it("rejects a tampered signature → 401", async () => {
     const { path, token, ts } = await completeCallback("/admin");
 
