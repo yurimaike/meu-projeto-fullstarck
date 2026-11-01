@@ -120,16 +120,24 @@ async function requestGemini(input: PlatformAIChatInput, stream: boolean) {
   });
 
   if (!response.ok) {
+    // Read the provider body only to classify the error. Do not log it: upstream
+    // error bodies can include request details that are unnecessary in logs.
     const detail = await response.text().catch(() => "");
-    // Keep the provider response in server logs for diagnosis, but never log the
-    // request URL because it contains the private API key.
+    const isInvalidKey = detail.includes("API_KEY_INVALID");
     console.error("[PlatformAI] Gemini request failed", {
       status: response.status,
       model: GEMINI_MODEL,
       stream,
-      detail: detail.slice(0, 2000)
+      errorCategory: isInvalidKey
+        ? "invalid_api_key"
+        : response.status === 429
+          ? "rate_or_quota_limit"
+          : response.status === 403
+            ? "permission_denied"
+            : response.status === 404
+              ? "model_not_found"
+              : "upstream_error"
     });
-    const isInvalidKey = detail.includes("API_KEY_INVALID");
     const message = isInvalidKey
       ? "A chave GEMINI_API_KEY foi rejeitada pelo Google. Confira a variável no Render."
       : response.status === 404
