@@ -64,6 +64,23 @@ describe("bookings route", () => {
     const list = await app.fetch(new Request(`http://localhost/api/bookings?date=${date}`));
     expect(((await list.json()) as { data: { busyTimes: string[] } }).data.busyTimes).not.toContain("14:30");
   });
+  it("rejects oversized admin booking status payloads before processing", async () => {
+    const admin = await signUpAndGetToken(app, { email: "booking-payload-admin@example.com" });
+    if (!admin.userId) throw new Error("Admin fixture did not return a user id");
+    await executeSql("UPDATE user SET role = 'admin' WHERE id = ?", [admin.userId]);
+
+    const body = JSON.stringify({ action: "confirmed", note: "x".repeat(50_000) });
+    const res = await fetchWithAuth(app, admin.token, "/api/bookings/booking-test-id/status", {
+      method: "PATCH",
+      body
+    });
+
+    expect(new TextEncoder().encode(body).byteLength).toBeGreaterThan(50_000);
+    expect(res.status).toBe(413);
+    const payload = await res.json() as { error?: { code?: string } };
+    expect(payload.error?.code).toBe("PAYLOAD_TOO_LARGE");
+  });
+
   it("rejects oversized public booking request bodies before processing", async () => {
     const body = JSON.stringify({ payload: "x".repeat(50_000) });
     const res = await app.fetch(new Request("http://localhost/api/bookings", {
