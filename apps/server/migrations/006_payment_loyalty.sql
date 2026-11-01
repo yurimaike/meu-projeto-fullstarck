@@ -5,9 +5,10 @@ ALTER TABLE bookings ADD COLUMN paymentUpdatedAt TEXT;
 CREATE TABLE IF NOT EXISTS loyalty_settings (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0,1)),
+  validityMonths INTEGER NOT NULL DEFAULT 12 CHECK (validityMonths BETWEEN 1 AND 60),
   updatedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-INSERT OR IGNORE INTO loyalty_settings (id, enabled) VALUES (1, 0);
+INSERT OR IGNORE INTO loyalty_settings (id, enabled, validityMonths) VALUES (1, 0, 12);
 
 CREATE TABLE IF NOT EXISTS loyalty_rewards (
   id TEXT PRIMARY KEY,
@@ -16,6 +17,7 @@ CREATE TABLE IF NOT EXISTS loyalty_rewards (
   cycleNumber INTEGER NOT NULL,
   status TEXT NOT NULL DEFAULT 'earned' CHECK (status IN ('earned','redeemed')),
   earnedAt TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  expiresAt TEXT,
   redeemedAt TEXT,
   redeemedBookingId TEXT,
   redeemedService TEXT,
