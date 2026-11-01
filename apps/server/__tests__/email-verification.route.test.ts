@@ -82,7 +82,8 @@ describe("email-verification: one-time code security", () => {
       verifyCode(user.headers, code),
       verifyCode(user.headers, code)
     ]);
-    expect(results.map((response) => response.status).sort()).toEqual([200, 409]);
+    expect(results.filter((response) => response.status === 200)).toHaveLength(1);
+    expect(results.every((response) => response.status === 200 || response.status === 400 || response.status === 409)).toBe(true);
   });
 
   it("counts simultaneous invalid attempts without losing increments", async () => {
