@@ -78,16 +78,32 @@ function geminiUrl(stream: boolean) {
 }
 
 async function requestGemini(input: PlatformAIChatInput, stream: boolean) {
+  // Resolve configuration before the network try/catch so a missing API key
+  // is reported as NOT_CONFIGURED rather than a misleading connection failure.
+  const url = geminiUrl(stream);
   let response: Response;
   try {
-    response = await fetch(geminiUrl(stream), {
+    response = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(toGeminiRequest(input)),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
     });
-  } catch {
-    throw new PlatformAIError("PLATFORM_AI_REQUEST_FAILED", "Falha ao conectar ao Gemini.", 502);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    console.error("[PlatformAI] Gemini network request failed", {
+      model: GEMINI_MODEL,
+      stream,
+      errorName: error instanceof Error ? error.name : "UnknownError",
+      detail: detail.slice(0, 1000)
+    });
+    throw new PlatformAIError(
+      "PLATFORM_AI_REQUEST_FAILED",
+      error instanceof Error && error.name === "TimeoutError"
+        ? "A conexão com o Gemini excedeu o tempo limite. Tente novamente."
+        : "O servidor não conseguiu alcançar a API do Gemini. Confira os Logs do Render.",
+      502
+    );
   }
 
   if (!response.ok) {
