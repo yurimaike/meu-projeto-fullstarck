@@ -50,8 +50,22 @@ describe("admin AI access boundary", () => {
     expect(body.error?.code).toBe("INVALID_INPUT");
   });
 
+  it("also protects image generation from anonymous visitors", async () => {
+    const response = await createApp().request("/ai/images", { method: "POST" });
+    expect(response.status).toBe(401);
+    const body = await response.json() as { error?: { code?: string } };
+    expect(body.error?.code).toBe("UNAUTHORIZED");
+  });
+
   it("also protects image generation from customer accounts", async () => {
     const response = await createApp("user").request("/ai/images", { method: "POST" });
+    expect(response.status).toBe(403);
+    const body = await response.json() as { error?: { code?: string } };
+    expect(body.error?.code).toBe("FORBIDDEN");
+  });
+
+  it("protects the trailing-slash chat route from customer accounts", async () => {
+    const response = await createApp("user").request("/ai/", { method: "POST" });
     expect(response.status).toBe(403);
     const body = await response.json() as { error?: { code?: string } };
     expect(body.error?.code).toBe("FORBIDDEN");
