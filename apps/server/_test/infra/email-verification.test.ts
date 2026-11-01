@@ -2,7 +2,11 @@ import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { applyMigrations, resetDatabase, signUpAndGetToken } from "../helpers";
 import { executeSql } from "../../_core/db";
 
-const sendEmailVerificationCode = vi.fn(async () => ({ id: "email_1" }));
+const sentCodes = new Map<string, string>();
+const sendEmailVerificationCode = vi.fn(async ({ email, code }: { email: string; code: string }) => {
+  sentCodes.set(email.toLowerCase(), code);
+  return { id: "email_1" };
+});
 type ApiErrorBody = { error: { code: string } };
 
 vi.mock("../../services/message", () => ({
@@ -23,11 +27,9 @@ beforeEach(async () => {
 
 describe("email verification routes", () => {
   async function getStoredCode(email: string) {
-    const stored = await executeSql("SELECT value FROM verification WHERE identifier = ?", [
-      `email-verification:${email}`
-    ]);
-    const raw = String(stored.rows[0]?.value ?? "");
-    return String(JSON.parse(raw).code);
+    const code = sentCodes.get(email.toLowerCase());
+    if (!code) throw new Error("Verification code was not captured by the email mock");
+    return code;
   }
 
   it("sends a 6-digit verification code to the signed-in user's email", async () => {
