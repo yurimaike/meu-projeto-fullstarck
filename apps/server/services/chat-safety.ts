@@ -21,7 +21,7 @@ export function detectSeriousChatIncident(messages: Array<{ role: string; conten
     return { visitorId: "", severity: "critical", reason: "Ameaça explícita de violência direcionada à profissional ou ao estabelecimento.", excerpt: latest.slice(0, 1200) };
   }
   const targetedCount = texts.filter((text) => targetedAbuse.test(text)).length;
-  if (targetedAbuse.test(latest) && targetedCount >= 3) {
+  if (targetedAbuse.test(latest) && targetedCount >= 2) {
     return { visitorId: "", severity: "high", reason: "Comportamento agressivo reiterado com insultos direcionados.", excerpt: latest.slice(0, 1200) };
   }
   return null;
