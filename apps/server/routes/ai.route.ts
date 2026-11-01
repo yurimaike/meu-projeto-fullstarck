@@ -1,4 +1,4 @@
-﻿import { createHash, createHmac } from "node:crypto";
+﻿import { createHash, createHmac, randomUUID } from "node:crypto";
 import { Hono, type Context } from "hono";
 import { z } from "zod";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
@@ -114,7 +114,7 @@ function approvalSecret() {
 
 function issuePlanApproval(userId: string, digest: string) {
   const expiresAt = Date.now() + 10 * 60 * 1000;
-  const payload = Buffer.from(JSON.stringify({ sub: userId, digest, exp: expiresAt })).toString("base64url");
+  const payload = Buffer.from(JSON.stringify({ sub: userId, digest, exp: expiresAt, jti: randomUUID() })).toString("base64url");
   const signature = createHmac("sha256", approvalSecret()).update(payload).digest("base64url");
   return { approval_token: payload + "." + signature, expires_at: new Date(expiresAt).toISOString() };
 }
