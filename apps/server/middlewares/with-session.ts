@@ -78,8 +78,10 @@ async function hydrateUserFromDatabase(authUser: AuthUser | null): Promise<AuthU
     .limit(1);
 
   const row = rows[0];
+  // Fail closed: a valid auth session must still map to an existing database user.
+  // Never trust a stale session role when the authoritative user row is missing.
   if (!row) {
-    return authUser;
+    return null;
   }
 
   return {
