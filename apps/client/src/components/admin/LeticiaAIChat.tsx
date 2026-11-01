@@ -62,7 +62,7 @@ export default function LeticiaAIChat() {
       for await (const chunk of streamPlatformAI({
         scene_key: "chat",
         messages: history
-      }), { admin: true })) {
+      }, { admin: true })) {
         reply += chunk;
         setMessages([
           ...nextMessages,
