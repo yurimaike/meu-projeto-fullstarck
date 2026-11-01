@@ -15,7 +15,11 @@ async function sendEmail(to: string[], subject: string, html: string) {
     console.warn("[booking-email] E-mail não enviado: configure RESEND_API_KEY e EMAIL_FROM.");
     return false;
   }
-  if (to.length === 0) {\n    console.warn("[booking-email] E-mail não enviado: destinatários não configurados.");\n    return false;\n  }\n  const response = await fetch("https://api.resend.com/emails", {
+  if (to.length === 0) {
+    console.warn("[booking-email] E-mail não enviado: destinatários não configurados.");
+    return false;
+  }
+  const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, html })
