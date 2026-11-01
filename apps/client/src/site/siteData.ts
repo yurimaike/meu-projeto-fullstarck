@@ -1,7 +1,7 @@
 export const salonContact = {
   email: "leticiacaio.borges30@gmail.com",
-  instagram: "https://www.instagram.com/naildesigner.lleticia/",
-  instagramHandle: "@naildesigner.lleticia",
+  instagram: "https://www.instagram.com/leticia.borgesnail/",
+  instagramHandle: "@leticia.borgesnail",
 };
 
 export type Service = {
