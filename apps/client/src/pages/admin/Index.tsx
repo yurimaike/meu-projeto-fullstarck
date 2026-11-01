@@ -15,7 +15,11 @@ type Booking = {
   bookingTime: string;
   service: string;
   status: string;
+  paymentStatus?: "paid" | "unpaid";
+  completedAt?: string | null;
 };
+type LoyaltyReward = { id: string; customerEmail: string; customerName: string; cycleNumber: number; status: "earned" | "redeemed"; earnedAt: string; redeemedAt?: string | null; redeemedService?: string | null };
+type LoyaltyData = { enabled: boolean; rewards: LoyaltyReward[]; customers: Array<{ customerEmail: string; customerName: string; completedPaid: number }> };
 type Payload<T> = { ok: boolean; data?: T; error?: { message?: string } };
 
 const statusLabels: Record<string, string> = {
@@ -32,6 +36,9 @@ function AdminContent() {
   const [dateFilter, setDateFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [refreshing, setRefreshing] = useState(false);
+  const [loyalty, setLoyalty] = useState<LoyaltyData>({ enabled: false, rewards: [], customers: [] });
+  const [serviceChoices] = useState(["Manicure e pedicure", "Esmaltação em gel", "Banho de gel", "Manutenção"]);
+  const [redeemChoices, setRedeemChoices] = useState<Record<string, string>>({});
 
   async function refresh() {
     setRefreshing(true);
@@ -41,11 +48,20 @@ function AdminContent() {
       const payload = await response.json() as Payload<{ bookings: Booking[] }>;
       if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível carregar as reservas.");
       setItems(payload.data?.bookings ?? []);
+      await refreshLoyalty();
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Erro ao carregar reservas.");
     } finally {
       setRefreshing(false);
     }
+  }
+
+  async function refreshLoyalty() {
+    try {
+      const response = await apiFetch("/loyalty/admin");
+      const payload = await response.json() as Payload<LoyaltyData>;
+      if (response.ok && payload.ok && payload.data) setLoyalty(payload.data);
+    } catch { /* agenda continua disponível mesmo se o painel de fidelidade falhar */ }
   }
 
   useEffect(() => { void refresh(); }, []);
@@ -67,6 +83,39 @@ function AdminContent() {
     } finally {
       setBusy("");
     }
+  }
+
+  async function updateBookingFlag(booking: Booking, endpoint: "payment" | "completion", value: boolean) {
+    setBusy(booking.id); setError("");
+    try {
+      const response = await apiFetch(`/loyalty/bookings/${booking.id}/${endpoint}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(endpoint === "payment" ? { paid: value } : { completed: value }) });
+      const payload = await response.json() as Payload<unknown>;
+      if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível atualizar.");
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao atualizar."); }
+    finally { setBusy(""); }
+  }
+
+  async function toggleLoyalty() {
+    try {
+      const response = await apiFetch("/loyalty/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ enabled: !loyalty.enabled }) });
+      const payload = await response.json() as Payload<{ enabled: boolean }>;
+      if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível alterar.");
+      await refreshLoyalty();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao alterar fidelidade."); }
+  }
+
+  async function redeemReward(reward: LoyaltyReward) {
+    const booking = items.find(item => item.customerEmail.toLowerCase() === reward.customerEmail.toLowerCase() && item.status === "confirmed");
+    const service = redeemChoices[reward.id] || serviceChoices[0];
+    if (!booking) { setError("A cliente precisa ter uma reserva aprovada para registrar o resgate."); return; }
+    if (!window.confirm(`Confirmar resgate do bônus de ${reward.customerName} para o serviço ${service}?`)) return;
+    try {
+      const response = await apiFetch(`/loyalty/rewards/${reward.id}/redeem`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ bookingId: booking.id, service }) });
+      const payload = await response.json() as Payload<unknown>;
+      if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível resgatar.");
+      await refreshLoyalty();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao resgatar bônus."); }
   }
 
   const visibleItems = useMemo(
@@ -117,6 +166,15 @@ function AdminContent() {
               <p className="mt-2 font-serif text-3xl text-[#66816a]">{confirmedCount}</p>
             </div>
           </div>
+
+          <section className="mb-7 rounded-3xl border border-[#e8d9cb] bg-white p-5 shadow-[0_12px_35px_rgba(92,65,43,0.06)] sm:p-7">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div><h2 className="font-serif text-2xl text-[#493629]">Fidelidade: a cada 8 atendimentos</h2><p className="mt-1 text-sm text-[#8c7767]">Somente atendimentos pagos e concluídos contam. O bônus dá direito a um serviço cadastrado.</p></div>
+              <button type="button" onClick={() => void toggleLoyalty()} className={`rounded-full px-5 py-2.5 text-sm font-semibold ${loyalty.enabled ? "bg-[#6d8267] text-white" : "border border-[#d9c4b1] bg-white text-[#705844]"}`}>{loyalty.enabled ? "Programa ativado · Desativar" : "Programa desativado · Ativar"}</button>
+            </div>
+            <div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-[#fbf6f0] p-4"><p className="text-sm text-[#8c7767]">Bônus disponíveis</p><p className="mt-1 font-serif text-3xl text-[#493629]">{loyalty.rewards.filter(r => r.status === "earned").length}</p></div><div className="rounded-2xl bg-[#fbf6f0] p-4"><p className="text-sm text-[#8c7767]">Bônus já utilizados</p><p className="mt-1 font-serif text-3xl text-[#493629]">{loyalty.rewards.filter(r => r.status === "redeemed").length}</p></div></div>
+            <div className="mt-5 space-y-3">{loyalty.rewards.map(reward => <div key={reward.id} className="flex flex-col gap-3 rounded-xl border border-[#eaded3] p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-[#493629]">{reward.customerName}</p><p className="text-xs text-[#8c7767]">{reward.customerEmail} · Ciclo {reward.cycleNumber} · {reward.status === "earned" ? "Bônus disponível" : `Utilizado: ${reward.redeemedService ?? "serviço"}`}</p></div>{reward.status === "earned" && <div className="flex flex-wrap gap-2"><select value={redeemChoices[reward.id] || serviceChoices[0]} onChange={event => setRedeemChoices(old => ({ ...old, [reward.id]: event.target.value }))} className="rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm text-[#493629]">{serviceChoices.map(service => <option key={service}>{service}</option>)}</select><button type="button" onClick={() => void redeemReward(reward)} className="rounded-full bg-[#6d8267] px-4 py-2 text-sm font-semibold text-white">Confirmar resgate</button></div>}</div>)}</div>
+          </section>
 
           <section className="rounded-3xl border border-[#e8d9cb] bg-white p-5 shadow-[0_12px_35px_rgba(92,65,43,0.06)] sm:p-7">
             <div className="mb-6 flex flex-col gap-1">
@@ -183,6 +241,11 @@ function AdminContent() {
                       <div className="flex items-center gap-2"><Phone size={16} className="shrink-0 text-[#a1846c]" /> {booking.customerPhone}</div>
                     </div>
 
+                    <div className="mt-4 rounded-xl bg-[#fbf6f0] p-4 text-sm text-[#705f51]">
+                      <p>Pagamento: <strong>{booking.paymentStatus === "paid" ? "Recebido" : "Não recebido"}</strong></p>
+                      <p className="mt-1">Atendimento: <strong>{booking.completedAt ? "Concluído" : "Não concluído"}</strong></p>
+                      {status !== "rejected" && status !== "cancelled" && <div className="mt-3 flex flex-wrap gap-2"><button type="button" disabled={!!busy} onClick={() => void updateBookingFlag(booking, "payment", booking.paymentStatus !== "paid")} className="rounded-full border border-[#d9c4b1] bg-white px-4 py-2 text-xs font-semibold text-[#705844] disabled:opacity-50">{booking.paymentStatus === "paid" ? "Marcar não recebido" : "Confirmar pagamento"}</button><button type="button" disabled={!!busy || (booking.paymentStatus !== "paid" && !booking.completedAt)} onClick={() => void updateBookingFlag(booking, "completion", !booking.completedAt)} className="rounded-full border border-[#d9c4b1] bg-white px-4 py-2 text-xs font-semibold text-[#705844] disabled:opacity-50">{booking.completedAt ? "Reabrir atendimento" : "Marcar concluído"}</button></div>}
+                    </div>
                     <div className="mt-5 flex flex-wrap gap-2 border-t border-[#f0e7df] pt-4">
                       {status === "pending" && <>
                         <button type="button" disabled={!!busy} onClick={() => void decide(booking, "confirmed")} className="inline-flex items-center gap-2 rounded-full bg-[#6d8267] px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-[#586e53] disabled:opacity-50">
