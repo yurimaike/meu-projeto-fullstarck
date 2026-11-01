@@ -27,6 +27,7 @@ export default function CommercialAIChat() {
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
+  const [blocked, setBlocked] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const bottomRef = useRef<HTMLDivElement>(null);
 
@@ -35,7 +36,7 @@ export default function CommercialAIChat() {
   }, [messages, open]);
   async function sendMessage(messageText = input) {
     const text = messageText.trim();
-    if (!text || loading) return;
+    if (!text || loading || blocked) return;
 
     const nextMessages: ChatMessage[] = [
       ...messages,
@@ -64,11 +65,17 @@ export default function CommercialAIChat() {
     ];
 
     try {
+      let visitorId = window.localStorage.getItem("leticia-chat-visitor-id");
+      if (!visitorId) {
+        visitorId = window.crypto.randomUUID();
+        window.localStorage.setItem("leticia-chat-visitor-id", visitorId);
+      }
       let reply = "";
       try {
         for await (const chunk of streamPlatformAI({
           scene_key: "commercial_chat",
-          messages: history
+          messages: history,
+          visitor_id: visitorId
         })) {
           reply += chunk;
           setMessages([...nextMessages, { role: "assistant", content: reply }]);
@@ -88,6 +95,7 @@ export default function CommercialAIChat() {
       setMessages([...nextMessages, { role: "assistant", content: reply, timestamp: Date.now() }]);
     } catch (error) {
       const detail = error instanceof Error ? error.message : "";
+      if (detail.includes("atendimento pelo chat foi encerrado") || detail.includes("administração foi notificada")) setBlocked(true);
       setMessages([
         ...nextMessages,
         {
@@ -177,6 +185,7 @@ export default function CommercialAIChat() {
             <div ref={bottomRef} />
           </div>
 
+          {blocked && <div role="alert" className="mx-4 mb-3 rounded-xl border border-[#e3b7ae] bg-[#fff0ed] p-3 text-sm text-[#8e4339]">O atendimento pelo chat foi encerrado por segurança. A administração do salão foi notificada.</div>}
           <form
             className="commercial-ai-form"
             onSubmit={(event) => {
@@ -189,9 +198,9 @@ export default function CommercialAIChat() {
               onChange={(event) => setInput(event.target.value)}
               placeholder="Escreva sua mensagem..."
               aria-label="Mensagem para Letícia Comercial"
-              disabled={loading}
+              disabled={loading || blocked}
             />
-            <button type="submit" disabled={loading || !input.trim()} aria-label="Enviar mensagem">
+            <button type="submit" disabled={loading || blocked || !input.trim()} aria-label="Enviar mensagem">
               {loading ? <LoaderCircle size={19} className="commercial-ai-spin" /> : <Send size={19} />}
             </button>
           </form>

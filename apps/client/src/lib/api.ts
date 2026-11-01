@@ -45,6 +45,7 @@ export type PlatformAIMessageContent =
 export type PlatformAIChatInput = {
   scene_key: string;
   messages: PlatformAIChatMessage[];
+  visitor_id?: string;
 };
 
 export type PlatformAIImageInput = {

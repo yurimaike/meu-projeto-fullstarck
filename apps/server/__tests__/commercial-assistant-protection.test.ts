@@ -23,7 +23,8 @@ function makeRequest(app: Hono, message = "Olá") {
   return app.request("/commercial-assistant", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ scene_key: "commercial_chat", messages: [{ role: "user", content: message }] })
+    body: JSON.stringify({ scene_key: "commercial_chat",
+        visitor_id: "test-visitor-00000001", messages: [{ role: "user", content: message }] })
   });
 }
 

@@ -44,3 +44,21 @@ export async function notifyBookingDecision(booking: BookingMail) {
     sendEmail(ADMIN_EMAILS, `Atualização de reserva ${status} — ${booking.bookingCode}`, `<h1>Reserva ${status}</h1>${details(booking)}${booking.note ? `<p><b>Observação:</b> ${escapeHtml(booking.note)}</p>` : ""}`)
   ]);
 }
+
+export async function notifyChatSafetyIncident(input: {
+  visitorId: string;
+  severity: "high" | "critical";
+  reason: string;
+  excerpt: string;
+  createdAt: string;
+}) {
+  const excerpt = escapeHtml(input.excerpt.slice(0, 1200));
+  const html = `<h1>Alerta de segurança no chat</h1>
+    <p><b>Gravidade:</b> ${escapeHtml(input.severity === "critical" ? "Crítica" : "Alta")}</p>
+    <p><b>Motivo:</b> ${escapeHtml(input.reason)}</p>
+    <p><b>Identificador do visitante:</b> ${escapeHtml(input.visitorId)}</p>
+    <p><b>Data e hora:</b> ${escapeHtml(input.createdAt)}</p>
+    <blockquote>${excerpt}</blockquote>
+    <p>O acesso ao chat do site foi bloqueado automaticamente por regra de segurança. A administração deve revisar a ocorrência no painel.</p>`;
+  await sendEmail(ADMIN_EMAILS, "Alerta: ocorrência grave no chat — Letícia Nail Designer", html);
+}

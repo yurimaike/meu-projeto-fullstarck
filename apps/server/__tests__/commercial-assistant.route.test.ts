@@ -53,6 +53,7 @@ describe("commercial-assistant route", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         scene_key: "commercial_chat",
+        visitor_id: "test-visitor-00000001",
         messages: [{ role: "user", content: "" }]
       })
     });
@@ -67,6 +68,7 @@ describe("commercial-assistant route", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         scene_key: "commercial_chat",
+        visitor_id: "test-visitor-00000001",
         messages: [{ role: "user", content: longMessage }]
       })
     });
@@ -95,6 +97,7 @@ describe("commercial-assistant route", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         scene_key: "commercial_chat",
+        visitor_id: "test-visitor-00000001",
         messages: [{ role: "user", content: "Olá" }]
       })
     });
@@ -105,6 +108,7 @@ describe("commercial-assistant route", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         scene_key: "commercial_chat",
+        visitor_id: "test-visitor-00000001",
         messages: [{ role: "user", content: "Olá" }]
       })
     });
@@ -120,6 +124,7 @@ describe("commercial-assistant route", () => {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         scene_key: "commercial_chat",
+        visitor_id: "test-visitor-00000001",
         messages: [{ role: "user", content: "Olá" }]
       })
     });
