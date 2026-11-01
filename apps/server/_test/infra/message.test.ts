@@ -96,4 +96,30 @@ describe("message service with Resend", () => {
       message: "Invalid from address"
     });
   });
+
+  it("sends verification links through Resend without logging the URL", async () => {
+    vi.stubEnv("RESEND_API_KEY", "test-api-key");
+    vi.stubEnv("EMAIL_FROM", "Letícia Nail Designer <onboarding@resend.dev>");
+
+    const fetchMock = vi.fn<typeof fetch>(async () =>
+      new Response(JSON.stringify({ id: "email_verify_1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      })
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const { sendEmailVerificationLink } = await import("../../services/message");
+
+    await expect(sendEmailVerificationLink({
+      email: "visitor@example.com",
+      url: "https://example.com/verify?token=secret-test-token"
+    })).resolves.toBeUndefined();
+
+    const options = fetchMock.mock.calls[0]?.[1];
+    const body = JSON.parse(String(options?.body));
+    expect(body.to).toEqual(["visitor@example.com"]);
+    expect(body.html).toContain("https://example.com/verify?token=secret-test-token");
+    expect(options?.signal).toBeInstanceOf(AbortSignal);
+  });
+
 });
