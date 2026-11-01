@@ -134,22 +134,18 @@ export async function completeThirdPartyGoogleAuth(googleUser: GoogleUser, token
   }
 
   const normalizedUser = normalizeGoogleUser(googleUser);
-  const existingUser = await executeSql(
-    "SELECT id FROM user WHERE lower(email) = ? LIMIT 1",
+  // Google sign-in also requires current authorisation, even for an
+  // existing account. Removing the email blocks future Google logins.
+  const authorization = await executeSql(
+    "SELECT email FROM authorized_emails WHERE email = ? LIMIT 1",
     [normalizedUser.email]
   );
-  if (existingUser.rows.length === 0) {
-    const authorization = await executeSql(
-      "SELECT email FROM authorized_emails WHERE email = ? LIMIT 1",
-      [normalizedUser.email]
+  if (authorization.rows.length === 0) {
+    throw new ThirdPartyGoogleAuthError(
+      "EMAIL_NOT_AUTHORIZED",
+      "Este e-mail não está autorizado a acessar o site.",
+      403
     );
-    if (authorization.rows.length === 0) {
-      throw new ThirdPartyGoogleAuthError(
-        "EMAIL_NOT_AUTHORIZED",
-        "Este e-mail ainda não foi autorizado pelo administrador.",
-        403
-      );
-    }
   }
   const dbUser = await upsertThirdPartyUser({
     providerId: THIRD_PARTY_PROVIDER_ID,
@@ -179,7 +175,12 @@ export async function verifySignedLoginToken(pathname: string, token: string, ts
   // A valid HMAC alone is not enough: the associated session may have been
   // revoked or expired since the landing URL was issued.
   const activeSession = await executeSql(
-    "SELECT id FROM session WHERE token = ? AND expiresAt > ? LIMIT 1",
+    `SELECT session.id
+       FROM session
+       INNER JOIN user ON user.id = session.userId
+       INNER JOIN authorized_emails ON authorized_emails.email = lower(user.email)
+      WHERE session.token = ? AND session.expiresAt > ?
+      LIMIT 1`,
     [token, Math.floor(Date.now() / 1000)]
   );
   return activeSession.rows.length > 0;
