@@ -18,8 +18,8 @@ type Booking = {
   paymentStatus?: "paid" | "unpaid";
   completedAt?: string | null;
 };
-type LoyaltyReward = { id: string; customerEmail: string; customerName: string; cycleNumber: number; status: "earned" | "redeemed"; earnedAt: string; redeemedAt?: string | null; redeemedService?: string | null };
-type LoyaltyData = { enabled: boolean; rewards: LoyaltyReward[]; customers: Array<{ customerEmail: string; customerName: string; completedPaid: number }> };
+type LoyaltyReward = { id: string; customerEmail: string; customerName: string; cycleNumber: number; status: "earned" | "redeemed"; earnedAt: string; expiresAt?: string | null; redeemedAt?: string | null; redeemedService?: string | null };
+type LoyaltyData = { enabled: boolean; validityMonths: number; rewards: LoyaltyReward[]; customers: Array<{ customerEmail: string; customerName: string; completedPaid: number }> };
 type Payload<T> = { ok: boolean; data?: T; error?: { message?: string } };
 
 const statusLabels: Record<string, string> = {
@@ -36,7 +36,7 @@ function AdminContent() {
   const [dateFilter, setDateFilter] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [refreshing, setRefreshing] = useState(false);
-  const [loyalty, setLoyalty] = useState<LoyaltyData>({ enabled: false, rewards: [], customers: [] });
+  const [loyalty, setLoyalty] = useState<LoyaltyData>({ enabled: false, validityMonths: 12, rewards: [], customers: [] });
   const [serviceChoices] = useState(["Manicure e pedicure", "Esmaltação em gel", "Banho de gel", "Manutenção"]);
   const [redeemChoices, setRedeemChoices] = useState<Record<string, string>>({});
   const [redeemBookingChoices, setRedeemBookingChoices] = useState<Record<string, string>>({});
@@ -106,6 +106,28 @@ function AdminContent() {
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao alterar fidelidade."); }
   }
 
+  async function saveLoyaltyValidity(months: number) {
+    try {
+      const response = await apiFetch("/loyalty/settings", { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ validityMonths: months }) });
+      const payload = await response.json() as Payload<{ enabled: boolean; validityMonths: number }>;
+      if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível salvar a validade.");
+      await refreshLoyalty();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao salvar validade."); }
+  }
+
+  async function adjustRewardValidity(reward: LoyaltyReward) {
+    const raw = window.prompt("Quantos meses de validade a partir de hoje? Informe de 1 a 60.", "12");
+    if (raw === null) return;
+    const months = Number(raw);
+    if (!Number.isInteger(months) || months < 1 || months > 60) { setError("Informe um prazo entre 1 e 60 meses."); return; }
+    try {
+      const response = await apiFetch(`/loyalty/rewards/${reward.id}/validity`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ months }) });
+      const payload = await response.json() as Payload<unknown>;
+      if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível alterar a validade.");
+      await refreshLoyalty();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao alterar validade."); }
+  }
+
   async function redeemReward(reward: LoyaltyReward) {
     const booking = items.find(item => item.id === redeemBookingChoices[reward.id] && item.customerEmail.toLowerCase() === reward.customerEmail.toLowerCase() && item.status === "confirmed");
     const service = redeemChoices[reward.id] || serviceChoices[0];
@@ -173,8 +195,8 @@ function AdminContent() {
               <div><h2 className="font-serif text-2xl text-[#493629]">Fidelidade: a cada 8 atendimentos</h2><p className="mt-1 text-sm text-[#8c7767]">Somente atendimentos pagos e concluídos contam. O bônus dá direito a um serviço cadastrado.</p></div>
               <button type="button" onClick={() => void toggleLoyalty()} className={`rounded-full px-5 py-2.5 text-sm font-semibold ${loyalty.enabled ? "bg-[#6d8267] text-white" : "border border-[#d9c4b1] bg-white text-[#705844]"}`}>{loyalty.enabled ? "Programa ativado · Desativar" : "Programa desativado · Ativar"}</button>
             </div>
-            <div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-[#fbf6f0] p-4"><p className="text-sm text-[#8c7767]">Bônus disponíveis</p><p className="mt-1 font-serif text-3xl text-[#493629]">{loyalty.rewards.filter(r => r.status === "earned").length}</p></div><div className="rounded-2xl bg-[#fbf6f0] p-4"><p className="text-sm text-[#8c7767]">Bônus já utilizados</p><p className="mt-1 font-serif text-3xl text-[#493629]">{loyalty.rewards.filter(r => r.status === "redeemed").length}</p></div></div>
-            <div className="mt-5 space-y-3">{loyalty.rewards.map(reward => <div key={reward.id} className="flex flex-col gap-3 rounded-xl border border-[#eaded3] p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-[#493629]">{reward.customerName}</p><p className="text-xs text-[#8c7767]">{reward.customerEmail} · Ciclo {reward.cycleNumber} · {reward.status === "earned" ? "Bônus disponível" : `Utilizado: ${reward.redeemedService ?? "serviço"}`}</p></div>{reward.status === "earned" && <div className="flex flex-wrap gap-2"><select aria-label={`Reserva para resgate de ${reward.customerName}`} value={redeemBookingChoices[reward.id] || ""} onChange={event => setRedeemBookingChoices(old => ({ ...old, [reward.id]: event.target.value }))} className="rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm text-[#493629]"><option value="">Escolher reserva aprovada</option>{items.filter(item => item.customerEmail.toLowerCase() === reward.customerEmail.toLowerCase() && item.status === "confirmed").map(item => <option key={item.id} value={item.id}>{item.bookingDate} · {item.bookingTime} · {item.service}</option>)}</select><select aria-label={`Serviço gratuito de ${reward.customerName}`} value={redeemChoices[reward.id] || serviceChoices[0]} onChange={event => setRedeemChoices(old => ({ ...old, [reward.id]: event.target.value }))} className="rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm text-[#493629]">{serviceChoices.map(service => <option key={service}>{service}</option>)}</select><button type="button" onClick={() => void redeemReward(reward)} className="rounded-full bg-[#6d8267] px-4 py-2 text-sm font-semibold text-white">Confirmar resgate</button></div>}</div>)}</div>
+            <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-[#fbf6f0] p-4"><label className="text-sm font-medium text-[#705844]">Validade padrão dos novos bônus <select value={loyalty.validityMonths} onChange={event => void saveLoyaltyValidity(Number(event.target.value))} className="ml-2 rounded-xl border border-[#dfcdbd] bg-white px-3 py-2"><option value={1}>1 mês</option><option value={2}>2 meses</option><option value={3}>3 meses</option><option value={6}>6 meses</option><option value={12}>12 meses</option><option value={18}>18 meses</option><option value={24}>24 meses</option></select></label><span className="text-xs text-[#8c7767]">Cada bônus pode ter prazo próprio, ajustado pela Letícia.</span></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-[#fbf6f0] p-4"><p className="text-sm text-[#8c7767]">Bônus disponíveis</p><p className="mt-1 font-serif text-3xl text-[#493629]">{loyalty.rewards.filter(r => r.status === "earned").length}</p></div><div className="rounded-2xl bg-[#fbf6f0] p-4"><p className="text-sm text-[#8c7767]">Bônus já utilizados</p><p className="mt-1 font-serif text-3xl text-[#493629]">{loyalty.rewards.filter(r => r.status === "redeemed").length}</p></div></div>
+            <div className="mt-5 space-y-3">{loyalty.rewards.map(reward => <div key={reward.id} className="flex flex-col gap-3 rounded-xl border border-[#eaded3] p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-[#493629]">{reward.customerName}</p><p className="text-xs text-[#8c7767]">{reward.customerEmail} · Ciclo {reward.cycleNumber} · {reward.status === "earned" ? `Vence em: ${reward.expiresAt ? new Date(reward.expiresAt).toLocaleDateString("pt-BR") : "sem prazo definido"}` : `Utilizado: ${reward.redeemedService ?? "serviço"}`}</p></div>{reward.status === "earned" && <div className="flex flex-wrap gap-2"><button type="button" onClick={() => void adjustRewardValidity(reward)} className="rounded-full border border-[#d9c4b1] bg-white px-3 py-2 text-xs font-semibold text-[#705844]">Ajustar validade</button><select aria-label={`Reserva para resgate de ${reward.customerName}`} value={redeemBookingChoices[reward.id] || ""} onChange={event => setRedeemBookingChoices(old => ({ ...old, [reward.id]: event.target.value }))} className="rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm text-[#493629]"><option value="">Escolher reserva aprovada</option>{items.filter(item => item.customerEmail.toLowerCase() === reward.customerEmail.toLowerCase() && item.status === "confirmed").map(item => <option key={item.id} value={item.id}>{item.bookingDate} · {item.bookingTime} · {item.service}</option>)}</select><select aria-label={`Serviço gratuito de ${reward.customerName}`} value={redeemChoices[reward.id] || serviceChoices[0]} onChange={event => setRedeemChoices(old => ({ ...old, [reward.id]: event.target.value }))} className="rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm text-[#493629]">{serviceChoices.map(service => <option key={service}>{service}</option>)}</select><button type="button" onClick={() => void redeemReward(reward)} className="rounded-full bg-[#6d8267] px-4 py-2 text-sm font-semibold text-white">Confirmar resgate</button></div>}</div>)}</div>
           </section>
 
           <section className="rounded-3xl border border-[#e8d9cb] bg-white p-5 shadow-[0_12px_35px_rgba(92,65,43,0.06)] sm:p-7">
