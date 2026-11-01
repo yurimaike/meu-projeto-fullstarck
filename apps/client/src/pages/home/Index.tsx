@@ -40,7 +40,7 @@ const Index = () => {
             <div className="hero-image-card">
               <img
                 data-image-slot="home.hero"
-                src="/assets/slots/home.hero.jpg"
+                src="https://drive.google.com/uc?export=download&id=1FKATsShnBYRPIlt2v-pq9B9GOhNSzQbs"
                 alt="Perfil da Nail Designer Leticia com exemplos de manicure e pedicure"
                 width="620"
                 height="720"
