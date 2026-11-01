@@ -3,7 +3,7 @@ import { Hono } from "hono";
 import { z } from "zod";
 import { eq } from "drizzle-orm";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
-import { getDb } from "../_core/db";
+import { executeSql, getDb } from "../_core/db";
 import { env } from "../_core/env";
 import { protectedRoute } from "../_core/route-helpers";
 import { user as userTable, verification } from "../db/schema";
@@ -159,32 +159,45 @@ emailVerificationRouter.post("/verify-code", protectedRoute, verifyCodeRateLimit
   const stored = decodeVerificationValue(row.value);
   const expiresAt = row.expiresAt.getTime();
   if (Date.now() > expiresAt) {
-    await getDb().delete(verification).where(eq(verification.identifier, identifier));
+    await executeSql("DELETE FROM verification WHERE id = ?", [row.id]);
     return c.json(apiFailure("CODE_EXPIRED", "Verification code has expired"), 400);
   }
 
   if (!matchesVerificationCode(stored, parsed.data.code)) {
     const attempts = stored.attempts + 1;
     if (attempts >= MAX_VERIFY_ATTEMPTS) {
-      await getDb().delete(verification).where(eq(verification.identifier, identifier));
+      await executeSql("DELETE FROM verification WHERE id = ? AND value = ?", [row.id, row.value]);
       return c.json(apiFailure("CODE_ATTEMPTS_EXCEEDED", "Request a new verification code"), 429);
     }
 
-    await getDb()
-      .update(verification)
-      .set({
-        value: encodeVerificationValue({ ...(stored.codeHash ? { codeHash: stored.codeHash } : { code: stored.code }), attempts }),
-        updatedAt: new Date()
-      })
-      .where(eq(verification.identifier, identifier));
+    const nextValue = encodeVerificationValue({
+      ...(stored.codeHash ? { codeHash: stored.codeHash } : { code: stored.code }),
+      attempts
+    });
+    const updateResult = await executeSql(
+      "UPDATE verification SET value = ?, updatedAt = ? WHERE id = ? AND value = ?",
+      [nextValue, Date.now(), row.id, row.value]
+    );
+    if (updateResult.rowsAffected === 0) {
+      return c.json(apiFailure("CODE_INVALID", "Verification code was already checked. Try again."), 409);
+    }
     return c.json(apiFailure("CODE_INVALID", "Invalid verification code"), 400);
+  }
+
+  // Consume the exact row with a compare-and-delete. Only one concurrent
+  // request can claim a valid code; other rows for this identifier are untouched.
+  const consumeResult = await executeSql(
+    "DELETE FROM verification WHERE id = ? AND value = ? AND expiresAt >= ?",
+    [row.id, row.value, Date.now()]
+  );
+  if (consumeResult.rowsAffected === 0) {
+    return c.json(apiFailure("CODE_INVALID", "Verification code was already used or expired"), 409);
   }
 
   await getDb()
     .update(userTable)
     .set({ emailVerified: true, updatedAt: new Date() })
     .where(eq(userTable.id, user.id));
-  await getDb().delete(verification).where(eq(verification.identifier, identifier));
 
   return c.json(apiSuccess({ verified: true }), 200);
 });
