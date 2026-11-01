@@ -2,10 +2,10 @@
 
 ## Administradores
 
-Os dois utilizadores devem primeiro criar as suas contas pela página `/auth` usando os endereços autorizados abaixo. Depois, um operador com acesso administrativo ao banco deve executar o SQL de promoção, apenas depois de confirmar que as contas existem:
+Os administradores devem criar as suas contas pela página `/auth`. Para proteger a privacidade, os e-mails administrativos não são publicados neste documento. Um operador autorizado deve executar o SQL de promoção usando os endereços aprovados, guardados fora do repositório público:
 
 ```sql
-UPDATE user SET role = 'admin' WHERE lower(email) IN ('yurimaike123@gmail.com', 'leticia.silvalb.11296@gmail.com');
+-- Substitua pelos e-mails administrativos autorizados, fora do repositório público.\nUPDATE user SET role = 'admin' WHERE lower(email) IN ('admin1@example.com', 'admin2@example.com');
 ```
 
 Os dois endereços recebem permissões equivalentes no painel `/admin`. Não existe cadastro público de administradores e não se deve compartilhar senhas.
