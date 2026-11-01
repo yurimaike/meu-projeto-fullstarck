@@ -18,7 +18,7 @@ describe("CommercialAIChat", () => {
     render(<CommercialAIChat />);
     fireEvent.click(screen.getByLabelText("Abrir Letícia Comercial"));
     expect(screen.getByLabelText("Assistente comercial Letícia")).not.toBeNull();
-    expect(screen.getByText(/Como posso ajudar você hoje/)).not.toBeNull();
+    expect(screen.getByText(/Sou a Letícia Comercial/)).not.toBeNull();
   });
 
   it("envia mensagem e recebe resposta pelo streaming atual", async () => {
@@ -51,7 +51,7 @@ describe("CommercialAIChat", () => {
   });
 
   it("desabilita input enquanto carrega", () => {
-    mocks.streamPlatformAI.mockReturnValue(new Promise(() => {}));
+    mocks.streamPlatformAI.mockImplementation(async function* () { await new Promise(() => {}); });
     render(<CommercialAIChat />);
     fireEvent.click(screen.getByLabelText("Abrir Letícia Comercial"));
     const input = screen.getByPlaceholderText("Escreva sua mensagem...");
