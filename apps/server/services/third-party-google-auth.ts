@@ -57,15 +57,24 @@ export async function startThirdPartyGoogleAuth(origin: string, returnPath: stri
   }
 
   // return_path is a backend callback path; gateway will join it with the website API host.
-  const resp = await fetch(gatewayUrl("/gateway/api/website/auth/google_start"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      origin,
-      return_path: returnPath
-    }),
-    signal: AbortSignal.timeout(10_000)
-  });
+  let resp: Response;
+  try {
+    resp = await fetch(gatewayUrl("/gateway/api/website/auth/google_start"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        origin,
+        return_path: returnPath
+      }),
+      signal: AbortSignal.timeout(10_000)
+    });
+  } catch {
+    throw new ThirdPartyGoogleAuthError(
+      "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
+      "Third-party Google sign-in is temporarily unavailable",
+      502
+    );
+  }
 
   if (!resp.ok) {
     // Do not forward upstream response bodies to the public caller.
@@ -97,7 +106,13 @@ export async function startThirdPartyGoogleAuth(origin: string, returnPath: stri
       502
     );
   }
-  if (envelope.code !== 0 || authUrl.protocol !== "https:" || authUrl.hostname !== "accounts.google.com") {
+  if (
+    envelope.code !== 0 ||
+    authUrl.protocol !== "https:" ||
+    authUrl.hostname !== "accounts.google.com" ||
+    authUrl.username !== "" ||
+    authUrl.password !== ""
+  ) {
     // Provider messages can contain internal details; keep the public error generic.
     throw new ThirdPartyGoogleAuthError(
       "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
