@@ -82,6 +82,7 @@ async function requestGemini(input: PlatformAIChatInput, stream: boolean) {
   // is reported as NOT_CONFIGURED rather than a misleading connection failure.
   const url = geminiUrl(stream);
   let response: Response;
+  const requestStartedAt = performance.now();
   try {
     response = await fetch(url, {
       method: "POST",
@@ -105,6 +106,18 @@ async function requestGemini(input: PlatformAIChatInput, stream: boolean) {
       502
     );
   }
+
+  console.info("[PlatformAI] Gemini response headers", {
+    model: GEMINI_MODEL,
+    stream,
+    status: response.status,
+    responseMs: Math.round(performance.now() - requestStartedAt),
+    messageCount: input.messages.filter((message) => message.role !== "system").length,
+    inputChars: input.messages.reduce((sum, message) => {
+      const content = messageText(message.content);
+      return sum + content.length;
+    }, 0)
+  });
 
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -132,6 +145,7 @@ async function requestGemini(input: PlatformAIChatInput, stream: boolean) {
 }
 
 export async function requestPlatformAIChat(input: PlatformAIChatInput) {
+  const requestStartedAt = performance.now();
   const response = await requestGemini(input, false);
   let data: {
     candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }>;
@@ -142,11 +156,18 @@ export async function requestPlatformAIChat(input: PlatformAIChatInput) {
     throw new PlatformAIError("PLATFORM_AI_INVALID_RESPONSE", "A resposta do Gemini é inválida.", 502);
   }
   const reply = data.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("") ?? "";
+  console.info("[PlatformAI] Gemini non-stream completed", {
+    model: GEMINI_MODEL,
+    totalMs: Math.round(performance.now() - requestStartedAt),
+    outputChars: reply.length
+  });
   return { reply };
 }
 
 export async function requestPlatformAIChatStream(input: PlatformAIChatInput) {
+  const requestStartedAt = performance.now();
   const upstream = await requestGemini(input, true);
+  const upstreamHeadersMs = Math.round(performance.now() - requestStartedAt);
   if (!upstream.body) {
     throw new PlatformAIError("PLATFORM_AI_INVALID_RESPONSE", "O Gemini não retornou um fluxo de resposta.", 502);
   }
@@ -157,9 +178,15 @@ export async function requestPlatformAIChatStream(input: PlatformAIChatInput) {
   const stream = new ReadableStream<Uint8Array>({
     async start(controller) {
       const reader = upstream.body!.getReader();
+      let firstByteMs: number | null = null;
+      let firstTextMs: number | null = null;
+      let outputChars = 0;
       try {
         while (true) {
           const { done, value } = await reader.read();
+          if (value?.byteLength && firstByteMs === null) {
+            firstByteMs = Math.round(performance.now() - requestStartedAt);
+          }
           buffer += decoder.decode(value, { stream: !done });
           let boundary = buffer.match(/\r?\n\r?\n/);
           while (boundary?.index !== undefined) {
@@ -171,6 +198,10 @@ export async function requestPlatformAIChatStream(input: PlatformAIChatInput) {
                 const parsed = JSON.parse(data) as { candidates?: Array<{ content?: { parts?: Array<{ text?: string }> } }> };
                 const content = parsed.candidates?.[0]?.content?.parts?.map((part) => part.text ?? "").join("");
                 if (content) {
+                  if (firstTextMs === null) {
+                    firstTextMs = Math.round(performance.now() - requestStartedAt);
+                  }
+                  outputChars += content.length;
                   controller.enqueue(encoder.encode(`data: ${JSON.stringify({ choices: [{ delta: { content } }] })}\n\n`));
                 }
               } catch { /* Ignore incomplete or non-content Gemini events. */ }
@@ -182,8 +213,21 @@ export async function requestPlatformAIChatStream(input: PlatformAIChatInput) {
         controller.enqueue(encoder.encode("data: [DONE]\n\n"));
         controller.close();
       } catch (error) {
+        console.error("[PlatformAI] Gemini stream interrupted", {
+          model: GEMINI_MODEL,
+          errorName: error instanceof Error ? error.name : "UnknownError",
+          detail: error instanceof Error ? error.message.slice(0, 500) : String(error).slice(0, 500)
+        });
         controller.error(error);
       } finally {
+        console.info("[PlatformAI] Gemini stream timing", {
+          model: GEMINI_MODEL,
+          upstreamHeadersMs,
+          firstByteMs,
+          firstTextMs,
+          totalMs: Math.round(performance.now() - requestStartedAt),
+          outputChars
+        });
         reader.releaseLock();
       }
     }
