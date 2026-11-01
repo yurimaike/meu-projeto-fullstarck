@@ -3,6 +3,7 @@ import { z } from "zod";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
 import { DatabaseError } from "../_core/db";
 import { protectedRoute } from "../_core/route-helpers";
+import { bodySizeLimit } from "../middlewares/body-size-limit";
 import { createTodo, deleteTodo, listTodos, updateTodo } from "../services/todos";
 
 const CreateTodoSchema = z.object({
@@ -65,10 +66,10 @@ const createHandler = async (c: Context) => {
 
 todosRouter.get("", protectedRoute, listHandler);
 todosRouter.get("/", protectedRoute, listHandler);
-todosRouter.post("", protectedRoute, createHandler);
-todosRouter.post("/", protectedRoute, createHandler);
+todosRouter.post("", protectedRoute, bodySizeLimit, createHandler);
+todosRouter.post("/", protectedRoute, bodySizeLimit, createHandler);
 
-todosRouter.patch("/:id", protectedRoute, async (c) => {
+todosRouter.patch("/:id", protectedRoute, bodySizeLimit, async (c) => {
   const user = c.var.currentUser;
   const id = c.req.param("id");
   const parsed = UpdateTodoSchema.safeParse(await c.req.json().catch(() => null));
