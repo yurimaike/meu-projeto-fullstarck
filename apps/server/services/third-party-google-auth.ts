@@ -134,16 +134,22 @@ export async function completeThirdPartyGoogleAuth(googleUser: GoogleUser, token
   }
 
   const normalizedUser = normalizeGoogleUser(googleUser);
-  const authorization = await executeSql(
-    "SELECT email FROM authorized_emails WHERE email = ? LIMIT 1",
+  const existingUser = await executeSql(
+    "SELECT id FROM user WHERE lower(email) = ? LIMIT 1",
     [normalizedUser.email]
   );
-  if (authorization.rows.length === 0) {
-    throw new ThirdPartyGoogleAuthError(
-      "EMAIL_NOT_AUTHORIZED",
-      "Este e-mail ainda não foi autorizado pelo administrador.",
-      403
+  if (existingUser.rows.length === 0) {
+    const authorization = await executeSql(
+      "SELECT email FROM authorized_emails WHERE email = ? LIMIT 1",
+      [normalizedUser.email]
     );
+    if (authorization.rows.length === 0) {
+      throw new ThirdPartyGoogleAuthError(
+        "EMAIL_NOT_AUTHORIZED",
+        "Este e-mail ainda não foi autorizado pelo administrador.",
+        403
+      );
+    }
   }
   const dbUser = await upsertThirdPartyUser({
     providerId: THIRD_PARTY_PROVIDER_ID,
