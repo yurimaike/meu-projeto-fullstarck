@@ -4,11 +4,13 @@ import { apiFetch } from "@/lib/api";
 
 type Incident = { id: string; visitorId: string; severity: "high" | "critical"; reason: string; messageExcerpt: string; createdAt: string; status: string };
 type Block = { visitorId: string; blockedAt: string; reason: string };
+type HistoryEntry = { id: string; visitorId: string; action: "blocked" | "unblocked"; actor: string; reason: string; createdAt: string };
 type Payload<T> = { ok: boolean; data?: T; error?: { message?: string } };
 
 export default function ChatSafetyPanel() {
   const [incidents, setIncidents] = useState<Incident[]>([]);
   const [blocks, setBlocks] = useState<Block[]>([]);
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -16,10 +18,11 @@ export default function ChatSafetyPanel() {
     setLoading(true); setError("");
     try {
       const response = await apiFetch("/chat-safety/admin");
-      const payload = await response.json() as Payload<{ incidents: Incident[]; blocks: Block[] }>;
+      const payload = await response.json() as Payload<{ incidents: Incident[]; blocks: Block[]; history: HistoryEntry[] }>;
       if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível carregar as ocorrências.");
       setIncidents(payload.data?.incidents ?? []);
       setBlocks(payload.data?.blocks ?? []);
+      setHistory(payload.data?.history ?? []);
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao carregar ocorrências."); }
     finally { setLoading(false); }
   }
@@ -57,6 +60,8 @@ export default function ChatSafetyPanel() {
     <div className="mt-3 space-y-3">{blocks.map(block => <article key={block.visitorId} className="rounded-xl border border-[#eaded3] p-4"><div className="flex flex-wrap items-center justify-between gap-3"><div className="min-w-0"><p className="font-semibold text-[#493629]">Visitante bloqueado</p><p className="break-all text-xs text-[#8c7767]">ID: {block.visitorId}</p><p className="mt-1 text-sm text-[#705f51]">{block.reason}</p><p className="text-xs text-[#9a8574]">{new Date(block.blockedAt).toLocaleString("pt-BR")}</p></div><button type="button" onClick={() => void unblock(block.visitorId)} className="inline-flex items-center gap-2 rounded-full bg-[#6d8267] px-4 py-2 text-sm font-semibold text-white"><Unlock size={15} /> Desbloquear</button></div></article>)}{blocks.length===0 && <p className="rounded-xl bg-[#fbf6f0] p-4 text-sm text-[#8c7767]">Nenhum bloqueio ativo.</p>}</div>
     <h3 className="mt-6 font-semibold text-[#493629]">Histórico de ocorrências</h3>
     <div className="mt-3 space-y-3">{incidents.map(item => <article key={item.id} className="rounded-xl border border-[#eaded3] p-4"><div className="flex flex-wrap items-center justify-between gap-2"><span className="text-xs font-bold uppercase tracking-wide text-[#9b594c]">{item.severity === "critical" ? "Gravidade crítica" : "Gravidade alta"} · {item.status === "open" ? "Pendente" : item.status === "reviewed" ? "Revisada" : "Descartada"}</span><time className="text-xs text-[#9a8574]">{new Date(item.createdAt).toLocaleString("pt-BR")}</time></div><p className="mt-2 text-sm font-semibold text-[#493629]">{item.reason}</p><p className="mt-2 whitespace-pre-wrap rounded-lg bg-[#fbf6f0] p-3 text-sm text-[#705f51]">{item.messageExcerpt}</p><p className="mt-2 break-all text-xs text-[#9a8574]">Visitante: {item.visitorId}</p>{item.status==="open" && <div className="mt-3 flex gap-2"><button type="button" onClick={() => void review(item.id,"reviewed")} className="rounded-full border border-[#d9c4b1] px-3 py-2 text-xs font-semibold text-[#705844]">Marcar revisada</button><button type="button" onClick={() => void review(item.id,"dismissed")} className="rounded-full border border-[#e3c8c0] px-3 py-2 text-xs font-semibold text-[#9b594c]">Descartar ocorrência</button></div>}</article>)}{incidents.length===0 && <p className="rounded-xl bg-[#fbf6f0] p-4 text-sm text-[#8c7767]">Nenhuma ocorrência registrada.</p>}</div>
+    <h3 className="mt-6 font-semibold text-[#493629]">Histórico de bloqueios e desbloqueios</h3>
+    <div className="mt-3 space-y-2">{history.map(entry => <div key={entry.id} className="rounded-xl bg-[#fbf6f0] p-3 text-sm"><p className="font-semibold text-[#493629]">{entry.action === "blocked" ? "Bloqueado" : "Desbloqueado"} · {new Date(entry.createdAt).toLocaleString("pt-BR")}</p><p className="break-all text-xs text-[#8c7767]">Visitante: {entry.visitorId} · Responsável: {entry.actor}</p><p className="text-sm text-[#705f51]">{entry.reason}</p></div>)}{history.length===0 && <p className="text-sm text-[#8c7767]">Nenhuma ação registrada.</p>}</div>
     <p className="mt-4 flex items-center gap-2 text-xs text-[#8c7767]"><ShieldCheck size={14} /> Somente administradores autenticados podem rever ocorrências e desbloquear visitantes.</p>
   </section>;
 }
