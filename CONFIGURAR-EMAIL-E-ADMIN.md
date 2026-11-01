@@ -25,7 +25,7 @@ Se uma conta ainda não existir, ela precisa criar a conta primeiro; depois exec
 O projeto está preparado para enviar e-mails pelo serviço Resend. Configure estas variáveis no ambiente do backend (Render):
 
 - `RESEND_API_KEY`: chave privada criada na conta Resend.
-- `EMAIL_FROM`: remetente verificado no Resend, por exemplo `Agenda Letícia <agenda@seudominio.com>`.
+- `EMAIL_FROM`: remetente verificado no Resend, por exemplo `Agenda Letícia <agenda@seudominio.com>`.\n- `BOOKING_ADMIN_EMAILS`: e-mails dos destinatários das notificações de reservas, separados por vírgulas; configure apenas no ambiente privado do backend.
 
 Sem essas duas variáveis, reservas e decisões continuam a ser gravadas, mas os e-mails não são enviados. O backend regista um aviso no log. A chave Resend nunca deve ser colocada no frontend.
 
