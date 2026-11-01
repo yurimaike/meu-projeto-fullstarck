@@ -63,8 +63,8 @@ export default function CommercialAIChat() {
           reply += chunk;
           setMessages([...nextMessages, { role: "assistant", content: reply }]);
         }
-      } catch {
-        throw new Error("Não consegui conectar ao assistente. Tente novamente.");
+      } catch (error) {
+        throw error instanceof Error ? error : new Error("Não consegui conectar ao assistente. Tente novamente.");
       }
 
       if (!reply.trim()) {
@@ -74,12 +74,13 @@ export default function CommercialAIChat() {
         ]);
         return;
       }
-    } catch {
+    } catch (error) {
+      const detail = error instanceof Error ? error.message : "";
       setMessages([
         ...nextMessages,
         {
           role: "assistant",
-          content: "Não consegui conectar ao assistente comercial. Verifique a conexão e tente novamente, ou fale diretamente conosco pelo WhatsApp."
+          content: detail || "Não consegui conectar ao assistente comercial. Verifique a conexão e tente novamente, ou fale diretamente conosco pelo WhatsApp."
         }
       ]);
     } finally {
