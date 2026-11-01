@@ -216,6 +216,25 @@ describe("third-party-google-auth: callback", () => {
     expect(accounts.rows.map((row) => String(row.accountId))).toEqual(["google-sub-123"]);
   });
 
+  it("rejects linking a Google subject already owned by a different email", async () => {
+    await completeCallback();
+
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/callback", {
+        user: { ...GOOGLE_USER, email: "another.person@example.com" },
+        token: GATEWAY_TOKEN,
+        landing_path: "/admin"
+      })
+    );
+
+    expect(res.status).toBe(409);
+    const users = await executeSql(
+      "SELECT id FROM user WHERE email = ?",
+      ["another.person@example.com"]
+    );
+    expect(users.rows.length).toBe(0);
+  });
+
   it("reuses the existing user on repeat sign-in instead of duplicating", async () => {
     await completeCallback();
     await completeCallback();
