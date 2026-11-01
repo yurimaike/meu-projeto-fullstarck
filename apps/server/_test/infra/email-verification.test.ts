@@ -21,6 +21,7 @@ beforeAll(async () => {
 });
 
 beforeEach(async () => {
+  sentCodes.clear();
   sendEmailVerificationCode.mockClear();
   await resetDatabase();
 });
