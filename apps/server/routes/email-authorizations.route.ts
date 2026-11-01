@@ -33,5 +33,10 @@ emailAuthorizationsRouter.delete("/:email", adminRoute, limit, async (c) => {
   if (!parsed.success) return c.json(apiFailure("INVALID_EMAIL", "E-mail inválido."), 400);
   const email = parsed.data.email.toLowerCase();
   await executeSql("DELETE FROM authorized_emails WHERE email = ?", [email]);
-  return c.json(apiSuccess({ email, removed: true }));
+  // Revoke every existing session immediately; the user account itself remains intact.
+  await executeSql(
+    "DELETE FROM session WHERE userId IN (SELECT id FROM user WHERE lower(email) = ?)",
+    [email]
+  );
+  return c.json(apiSuccess({ email, removed: true, sessionsRevoked: true }));
 });
