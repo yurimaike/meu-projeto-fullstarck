@@ -244,18 +244,18 @@ async function ensureThirdPartyAccount(
     where: and(eq(account.userId, userId), eq(account.providerId, providerId))
   });
 
-  if (existing) {
-    if (existing.accountId !== providerAccountId) {
-      await db
-        .update(account)
-        .set({
-          accountId: providerAccountId,
-          updatedAt: now
-        })
-        .where(eq(account.id, existing.id));
-    }
-    return;
+  if (existing && existing.accountId !== providerAccountId) {
+    throw new DatabaseError("INVALID_INPUT", "Google account identity mismatch", 409);
   }
+
+  const linked = await db.query.account.findFirst({
+    where: and(eq(account.providerId, providerId), eq(account.accountId, providerAccountId))
+  });
+  if (linked && linked.userId !== userId) {
+    throw new DatabaseError("INVALID_INPUT", "Google account is linked to another user", 409);
+  }
+
+  if (existing) return;
 
   await db.insert(account).values({
     id: crypto.randomUUID(),
