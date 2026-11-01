@@ -51,7 +51,7 @@ describe("CommercialAIChat", () => {
   });
 
   it("desabilita input enquanto carrega", () => {
-    mocks.streamPlatformAI.mockImplementation(async function* () { await new Promise(() => {}); });
+    mocks.streamPlatformAI.mockImplementation(async function* () { await new Promise(() => {}); yield ""; });
     render(<CommercialAIChat />);
     fireEvent.click(screen.getByLabelText("Abrir Letícia Comercial"));
     const input = screen.getByPlaceholderText("Escreva sua mensagem...");
@@ -63,6 +63,7 @@ describe("CommercialAIChat", () => {
   it("trata erro da IA com mensagem amigável", async () => {
     mocks.streamPlatformAI.mockImplementation(async function* () {
       throw new Error("Falha na conexão");
+      yield "";
     });
     render(<CommercialAIChat />);
     fireEvent.click(screen.getByLabelText("Abrir Letícia Comercial"));
