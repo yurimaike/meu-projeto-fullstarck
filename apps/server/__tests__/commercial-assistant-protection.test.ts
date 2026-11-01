@@ -105,7 +105,14 @@ describe("public AI protections", () => {
   });
 
   it("legacy public AI route rejects oversized total conversation text", async () => {
-    const response = await makePublicRequest(publicAppForTest(), "x".repeat(10_001));
+    const response = await publicAppForTest().request("/public-ai", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        scene_key: "commercial_chat",
+        messages: Array.from({ length: 6 }, () => ({ role: "user", content: "x".repeat(2000) }))
+      })
+    });
 
     expect(response.status).toBe(400);
     expect(requestAI).not.toHaveBeenCalled();
