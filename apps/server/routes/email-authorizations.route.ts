@@ -29,7 +29,7 @@ emailAuthorizationsRouter.post("/", adminRoute, limit, bodySizeLimit, async (c) 
 });
 
 emailAuthorizationsRouter.delete("/:email", adminRoute, limit, async (c) => {
-  const parsed = schema.safeParse({ email: decodeURIComponent(c.req.param("email")) });
+  const parsed = schema.safeParse({ email: c.req.param("email") });
   if (!parsed.success) return c.json(apiFailure("INVALID_EMAIL", "E-mail inválido."), 400);
   const email = parsed.data.email.toLowerCase();
   await executeSql("DELETE FROM authorized_emails WHERE email = ?", [email]);
