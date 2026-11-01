@@ -8,8 +8,9 @@ const fromRoot = (path: string) => fileURLToPath(new URL(`../../${path}`, import
 export default defineConfig({
   envDir: "../..",
   ssr: {
-    noExternal: true
-  },
+  external: ["sharp"],
+  noExternal: true
+},
   resolve: {
     alias: [
       { find: /^@libsql\/client$/, replacement: "@libsql/client/web" },
