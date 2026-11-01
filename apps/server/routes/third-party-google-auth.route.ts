@@ -10,6 +10,7 @@ import {
   type GoogleUser
 } from "../services/third-party-google-auth";
 import { DatabaseError } from "../_core/db";
+import { bodySizeLimit } from "../middlewares/body-size-limit";
 
 export const isPublic = true;
 
@@ -33,12 +34,18 @@ const VerifySchema = z.object({
 
 export const thirdPartyGoogleAuthRouter = new Hono();
 
+function parsedBody(c: import("hono").Context) {
+  const raw = c.get("rawBody") as Uint8Array | undefined;
+  if (!raw) return null;
+  try { return JSON.parse(new TextDecoder().decode(raw)) as unknown; } catch { return null; }
+}
+
 thirdPartyGoogleAuthRouter.get("/config", (c) => {
   return c.json(apiSuccess({ enabled: isThirdPartyGoogleAuthConfigured() }));
 });
 
-thirdPartyGoogleAuthRouter.post("/start", async (c) => {
-  const parsed = StartSchema.safeParse(await c.req.json().catch(() => ({})));
+thirdPartyGoogleAuthRouter.post("/start", bodySizeLimit, async (c) => {
+  const parsed = StartSchema.safeParse(parsedBody(c) ?? {});
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid third-party Google auth start input"), 400);
   }
@@ -56,8 +63,8 @@ thirdPartyGoogleAuthRouter.post("/start", async (c) => {
   }
 });
 
-thirdPartyGoogleAuthRouter.post("/callback", async (c) => {
-  const parsed = CallbackSchema.safeParse(await c.req.json().catch(() => null));
+thirdPartyGoogleAuthRouter.post("/callback", bodySizeLimit, async (c) => {
+  const parsed = CallbackSchema.safeParse(parsedBody(c));
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid third-party Google auth callback input"), 400);
   }
@@ -82,8 +89,8 @@ thirdPartyGoogleAuthRouter.post("/callback", async (c) => {
   }
 });
 
-thirdPartyGoogleAuthRouter.post("/verify", async (c) => {
-  const parsed = VerifySchema.safeParse(await c.req.json().catch(() => null));
+thirdPartyGoogleAuthRouter.post("/verify", bodySizeLimit, async (c) => {
+  const parsed = VerifySchema.safeParse(parsedBody(c));
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid third-party Google auth verification input"), 400);
   }
