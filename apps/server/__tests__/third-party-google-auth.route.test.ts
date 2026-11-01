@@ -254,6 +254,25 @@ describe("third-party-google-auth: callback", () => {
     expect(users.rows.length).toBe(1);
   });
 
+  it("blocks Google sign-in for an existing account after its authorisation is revoked", async () => {
+    const { token, path, ts, sig } = await completeCallback("/admin");
+    await executeSql("DELETE FROM authorized_emails WHERE email = ?", ["portal.owner@example.com"]);
+
+    const callback = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/callback", {
+        user: GOOGLE_USER,
+        token: GATEWAY_TOKEN,
+        landing_path: "/admin"
+      })
+    );
+    expect(callback.status).toBe(403);
+
+    const verify = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/verify", { path, token, ts, sig })
+    );
+    expect(verify.status).toBe(401);
+  });
+
   it("blocks a new Google account when its email was not authorised by an admin", async () => {
     const res = await app.fetch(
       jsonRequest("/api/third-party-google-auth/callback", {
