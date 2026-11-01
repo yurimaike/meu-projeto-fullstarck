@@ -18,6 +18,7 @@ Evoluir o chat privado Letícia AI para que a administradora possa pedir altera�
 ## Separação entre assistente administrativo e atendimento ao cliente
 
 - O componente Letícia AI deve permanecer montado exclusivamente dentro da página administrativa protegida por `AdminGuard`.
+- Até a implementação e validação do fluxo de aprovação/execução, a interface deve identificar claramente o modo como consulta/planeamento e não deve pedir confirmação de execução que ainda não consegue realizar.
 - Não importar nem renderizar Letícia AI em layouts, páginas ou componentes públicos/da área da cliente.
 - Todas as rotas do assistente administrativo devem aplicar `adminRoute` no servidor, inclusive chat, planeamento, aprovação, execução e geração de imagens.
 - O assistente comercial público é um produto separado: não pode receber ferramentas de edição, acesso ao GitHub, contexto administrativo, dados privados ou permissões de escrita.
@@ -40,7 +41,7 @@ Evoluir o chat privado Letícia AI para que a administradora possa pedir altera�
 ## Configuração externa necessária
 
 Antes de activar escritas reais, configurar no ambiente privado do backend:
-- GITHUB_TOKEN: token GitHub com permissões mínimas para ler o repositório, criar branches/commits e abrir Pull Requests.
+- Credencial GitHub do backend (preferencialmente GitHub App com instalação limitada a este repositório e permissões de Contents: read/write e Pull requests: read/write; alternativamente um token fine-grained com escopo apenas neste repositório e permissões mínimas).
 - GITHUB_REPOSITORY=yurimaike/meu-projeto-fullstarck.
 - GITHUB_BASE_BRANCH: branch de referência aprovada para o trabalho do assistente.
 
@@ -69,4 +70,4 @@ A publicação deve seguir esta ordem: branch -> Pull Request -> verificações 
 
 ## Estado
 
-Este documento define o contrato de produto e segurança. A implementação funcional das rotas de planeamento/aprovação/execução e da interface ainda não foi feita. O editor não está activo. A execução real ainda depende da implementação, de testes executados com sucesso, da configuração de credenciais GitHub no ambiente privado do backend e da confirmação da integração Cloudflare Pages/Render. Não considerar o editor activo nem publicar até todos os critérios de aceitação passarem.
+Este documento define o contrato de produto e segurança. O chat administrativo usa a rota `/api/ai` protegida por `adminRoute`, mas a interface permanece explicitamente em modo consulta/planeamento. As rotas funcionais de planeamento/aprovação/execução e a interface de aprovação ainda não foram implementadas. O editor não está activo. A execução real ainda depende da implementação, de testes executados com sucesso, da configuração de credenciais GitHub no ambiente privado do backend e da confirmação da integração Cloudflare Pages/Render. Não considerar o editor activo nem publicar até todos os critérios de aceitação passarem.
