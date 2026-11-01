@@ -78,6 +78,50 @@ describe("admin AI access boundary", () => {
 
 
 
+
+  it.each([
+    "apps/server/routes/ai.route.ts",
+    "apps/client/src/.env",
+    "apps/client/src/auth/session.ts",
+    "apps/client/src/../../server/secrets.ts",
+    "/apps/client/src/pages/Home.tsx"
+  ])("rejects an edit plan targeting unsafe path %s", async (unsafePath) => {
+    const plan = {
+      title: "Alteração proposta",
+      summary: "Plano de teste.",
+      files: [{ path: unsafePath, operation: "update", reason: "Teste de bloqueio." }],
+      risks: [],
+      checks: []
+    };
+    const response = await createApp("admin").request("/ai/plans/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(plan)
+    });
+    expect(response.status).toBe(400);
+    const body = await response.json() as { error?: { code?: string } };
+    expect(body.error?.code).toBe("UNSAFE_FILE_PATH");
+  });
+
+  it("accepts a plan limited to an ordinary frontend source file", async () => {
+    const plan = {
+      title: "Actualizar texto institucional",
+      summary: "Corrigir texto da página inicial.",
+      files: [{ path: "apps/client/src/content/home.ts", operation: "update", reason: "Texto aprovado." }],
+      risks: [],
+      checks: ["Rever página inicial"]
+    };
+    const response = await createApp("admin").request("/ai/plans/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(plan)
+    });
+    expect(response.status).toBe(200);
+    const body = await response.json() as { data?: { approval_required?: boolean; plan_hash?: string } };
+    expect(body.data?.approval_required).toBe(true);
+    expect(body.data?.plan_hash).toMatch(/^[a-f0-9]{64}$/);
+  });
+
   it("rejects approval when the submitted plan hash no longer matches", async () => {
     const plan = {
       title: "Actualizar texto institucional",
