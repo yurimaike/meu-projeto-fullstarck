@@ -84,7 +84,8 @@ describe("admin AI access boundary", () => {
     "apps/client/src/.env",
     "apps/client/src/auth/session.ts",
     "apps/client/src/../../server/secrets.ts",
-    "/apps/client/src/pages/Home.tsx"
+    "/apps/client/src/pages/Home.tsx",
+    "apps/client/src\\\u005csecret.ts"
   ])("rejects an edit plan targeting unsafe path %s", async (unsafePath) => {
     const plan = {
       title: "Alteração proposta",
@@ -173,6 +174,26 @@ describe("admin AI access boundary", () => {
     expect(response.status).toBe(400);
     const body = await response.json() as { error?: { code?: string } };
     expect(body.error?.code).toBe("INVALID_INPUT");
+  });
+
+  it("rejects a forged approval token before the GitHub integration gate", async () => {
+    const plan = {
+      title: "Actualizar texto institucional",
+      summary: "Corrigir texto da página inicial.",
+      files: [{ path: "apps/client/src/content/home.ts", operation: "update", reason: "Texto aprovado." }],
+      risks: [],
+      checks: ["Rever página inicial"]
+    };
+    const { createHash } = await import("node:crypto");
+    const plan_hash = createHash("sha256").update(JSON.stringify(plan)).digest("hex");
+    const response = await createApp("admin").request("/ai/plans/execute", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ plan, plan_hash, approval_token: "forged.token" })
+    });
+    expect(response.status).toBe(403);
+    const body = await response.json() as { error?: { code?: string } };
+    expect(body.error?.code).toBe("APPROVAL_INVALID");
   });
 
   it.each(["/ai/plans/preview", "/ai/plans/approve", "/ai/plans/execute"])("rejects customer access to %s", async (path) => {
