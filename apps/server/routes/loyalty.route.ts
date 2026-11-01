@@ -2,7 +2,7 @@ import { Hono } from "hono";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { apiFailure, apiSuccess } from "@repo/shared/http";
-import { adminRoute } from "../_core/route-helpers";
+import { adminRoute, protectedRoute } from "../_core/route-helpers";
 import { DatabaseError, executeSql } from "../_core/db";
 import { BOOKING_SERVICES } from "../services/bookings";
 import { bodySizeLimit } from "../middlewares/body-size-limit";
@@ -75,6 +75,32 @@ loyaltyRouter.patch("/bookings/:id/completion", adminRoute, bodySizeLimit, async
     );
     if (parsed.data.completed) await syncEarnedReward(String(booking.customerEmail), String(booking.customerName));
     return c.json(apiSuccess({ completed: parsed.data.completed }));
+  } catch (error) { return fail(c, error); }
+});
+
+loyaltyRouter.get("/mine", protectedRoute, async (c) => {
+  const user = c.var.currentUser;
+  if (!user.emailVerified) return c.json(apiFailure("EMAIL_NOT_VERIFIED", "Verifique seu e-mail para consultar seus bônus."), 403);
+  try {
+    const email = user.email.trim().toLowerCase();
+    const [progressResult, rewardsResult] = await Promise.all([
+      executeSql(
+        "SELECT COUNT(*) AS completedPaid FROM bookings WHERE lower(customerEmail)=? AND paymentStatus='paid' AND completedAt IS NOT NULL AND status IN ('confirmed','completed')",
+        [email]
+      ),
+      executeSql(
+        "SELECT id,cycleNumber,status,earnedAt,expiresAt,redeemedAt,redeemedService FROM loyalty_rewards WHERE lower(customerEmail)=? ORDER BY cycleNumber DESC",
+        [email]
+      )
+    ]);
+    const completedPaid = Number(progressResult.rows[0]?.completedPaid ?? 0);
+    return c.json(apiSuccess({
+      enabled: Boolean((await executeSql("SELECT enabled FROM loyalty_settings WHERE id=1")).rows[0]?.enabled),
+      completedPaid,
+      progressInCycle: completedPaid % 8,
+      bookingsUntilReward: 8 - (completedPaid % 8),
+      rewards: rewardsResult.rows
+    }));
   } catch (error) { return fail(c, error); }
 });
 

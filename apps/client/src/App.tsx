@@ -11,6 +11,7 @@ import AdminPage from "./pages/admin/Index";
 import AuthPage from "./pages/auth/Index";
 import ResetPasswordPage from "./pages/reset-password/Index";
 import MyBookingsPage from "./pages/my-bookings/Index";
+import MyRewardsPage from "./pages/my-rewards/Index";
 
 const queryClient = new QueryClient();
 
@@ -27,6 +28,7 @@ const App = () => (
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/reset-password" element={<ResetPasswordPage />} />
           <Route path="/minhas-reservas" element={<MyBookingsPage />} />
+          <Route path="/meus-bonus" element={<MyRewardsPage />} />
           <Route path="/admin" element={<AdminPage />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
