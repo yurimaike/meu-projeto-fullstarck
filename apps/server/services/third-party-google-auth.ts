@@ -137,7 +137,7 @@ function normalizeGoogleUser(googleUser: GoogleUser) {
   return {
     providerAccountId,
     email,
-    emailVerified: booleanValue(googleUser.email_verified) ?? booleanValue(googleUser.emailVerified) ?? true,
+    emailVerified: booleanValue(googleUser.email_verified) ?? booleanValue(googleUser.emailVerified) ?? false,
     name,
     image: stringValue(googleUser.picture) || stringValue(googleUser.avatar_url) || null
   };
