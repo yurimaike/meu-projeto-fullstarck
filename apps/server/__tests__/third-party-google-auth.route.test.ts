@@ -194,6 +194,26 @@ describe("third-party-google-auth: callback", () => {
     const body = (await res.json()) as { error?: { code?: string } };
     expect(body.error?.code).toBe("THIRD_PARTY_GOOGLE_AUTH_INVALID_USER");
   });
+
+  it.each([
+    ["false", { ...GOOGLE_USER, email_verified: false }],
+    ["missing", { sub: "google-sub-unverified", email: "unverified@example.com", name: "Unverified User" }]
+  ])("rejects a Google user whose email verification is %s → 403", async (_label, user) => {
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/callback", {
+        user,
+        token: GATEWAY_TOKEN
+      })
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("THIRD_PARTY_GOOGLE_AUTH_EMAIL_NOT_VERIFIED");
+
+    const users = await executeSql("SELECT id FROM user WHERE email = ?", [
+      "unverified@example.com"
+    ]);
+    expect(users.rows.length).toBe(0);
+  });
 });
 
 describe("third-party-google-auth: verify", () => {
