@@ -28,9 +28,10 @@ app.on(["GET", "POST"], "/api/auth/*", async (c) => {
     return c.json(apiFailure("DATABASE_UNCONFIGURED", "Skybase database runtime env is not configured"), 503);
   }
 
-  // Public registration is restricted to addresses explicitly authorised by an admin.
-  // Existing users can still sign in; this check applies only to account creation.
-  if (c.req.method === "POST" && new URL(c.req.url).pathname === "/api/auth/sign-up/email") {
+  // Every email/password sign-in and sign-up requires current admin authorisation.
+  // Removing an address therefore blocks both future logins and account creation.
+  const authPath = new URL(c.req.url).pathname;
+  if (c.req.method === "POST" && ["/api/auth/sign-up/email", "/api/auth/sign-in/email"].includes(authPath)) {
     const body = await c.req.raw.clone().json().catch(() => null) as { email?: unknown } | null;
     const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
     if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
