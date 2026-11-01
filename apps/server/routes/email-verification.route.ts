@@ -164,22 +164,38 @@ emailVerificationRouter.post("/verify-code", protectedRoute, verifyCodeRateLimit
   }
 
   if (!matchesVerificationCode(stored, parsed.data.code)) {
-    const attempts = stored.attempts + 1;
-    if (attempts >= MAX_VERIFY_ATTEMPTS) {
-      await executeSql("DELETE FROM verification WHERE id = ? AND value = ?", [row.id, row.value]);
-      return c.json(apiFailure("CODE_ATTEMPTS_EXCEEDED", "Request a new verification code"), 429);
-    }
-
-    const nextValue = encodeVerificationValue({
-      ...(stored.codeHash ? { codeHash: stored.codeHash } : { code: stored.code }),
-      attempts
-    });
-    const updateResult = await executeSql(
-      "UPDATE verification SET value = ? WHERE id = ? AND value = ?",
-      [nextValue, row.id, row.value]
-    );
-    if (updateResult.rowsAffected === 0) {
-      return c.json(apiFailure("CODE_INVALID", "Verification code was already checked. Try again."), 409);
+    if (stored.codeHash) {
+      // New-format values are JSON. Increment attempts inside SQLite so
+      // simultaneous wrong guesses cannot overwrite one another's counter.
+      await executeSql(
+        "UPDATE verification SET value = json_set(value, '$.attempts', COALESCE(CAST(json_extract(value, '$.attempts') AS INTEGER), 0) + 1) WHERE id = ? AND json_valid(value)",
+        [row.id]
+      );
+      const latest = await executeSql("SELECT value FROM verification WHERE id = ?", [row.id]);
+      if (latest.rows.length === 0) {
+        return c.json(apiFailure("CODE_ATTEMPTS_EXCEEDED", "Request a new verification code"), 429);
+      }
+      const latestValue = decodeVerificationValue(String(latest.rows[0].value));
+      if (latestValue.attempts >= MAX_VERIFY_ATTEMPTS) {
+        await executeSql("DELETE FROM verification WHERE id = ?", [row.id]);
+        return c.json(apiFailure("CODE_ATTEMPTS_EXCEEDED", "Request a new verification code"), 429);
+      }
+    } else {
+      // Legacy plaintext rows are kept compatible until they expire; use
+      // compare-and-swap because their value is not a JSON object.
+      const attempts = stored.attempts + 1;
+      if (attempts >= MAX_VERIFY_ATTEMPTS) {
+        await executeSql("DELETE FROM verification WHERE id = ? AND value = ?", [row.id, row.value]);
+        return c.json(apiFailure("CODE_ATTEMPTS_EXCEEDED", "Request a new verification code"), 429);
+      }
+      const nextValue = encodeVerificationValue({ code: stored.code, attempts });
+      const updateResult = await executeSql(
+        "UPDATE verification SET value = ? WHERE id = ? AND value = ?",
+        [nextValue, row.id, row.value]
+      );
+      if (updateResult.rowsAffected === 0) {
+        return c.json(apiFailure("CODE_INVALID", "Verification code was already checked. Try again."), 409);
+      }
     }
     return c.json(apiFailure("CODE_INVALID", "Invalid verification code"), 400);
   }
