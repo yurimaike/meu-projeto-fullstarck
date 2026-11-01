@@ -81,6 +81,20 @@ describe("email-verification: one-time code security", () => {
     expect(results.map((response) => response.status).sort()).toEqual([200, 409]);
   });
 
+  it("counts simultaneous invalid attempts without losing increments", async () => {
+    const user = await createUser();
+    expect((await sendCode(user.headers)).status).toBe(200);
+    const code = emailMock.send.mock.calls[0]?.[0].code;
+
+    const responses = await Promise.all(
+      Array.from({ length: 5 }, () => verifyCode(user.headers, "000000"))
+    );
+    expect(responses.every((response) => response.status === 400 || response.status === 429)).toBe(true);
+
+    const correctAttempt = await verifyCode(user.headers, code);
+    expect(correctAttempt.status).toBe(400);
+  });
+
   it("removes a code after five invalid attempts", async () => {
     const user = await createUser();
     expect((await sendCode(user.headers)).status).toBe(200);
