@@ -4,7 +4,7 @@ import { bearer, openAPI, username } from "better-auth/plugins";
 import * as schema from "../db/schema";
 import { getDb } from "./db";
 import { env } from "./env";
-import { sendPasswordResetEmail } from "../services/message";
+import { sendPasswordResetEmail, sendEmailVerificationLink } from "../services/message";
 import { isThirdPartyGoogleAuthConfigured } from "../services/third-party-google-auth";
 import { isUpstashConfigured, upstashSecondaryStorage } from "../services/upstash-redis";
 
@@ -63,12 +63,9 @@ function createAuth() {
       }
     },
     emailVerification: {
-      sendVerificationEmail: ({ user, url }) => {
-        // TODO(selfhost-auth): replace with Resend/SMS gateway integration when
-        // email verification is enabled for production templates. Use:
-        // void sendEmail({ to: user.email, subject: "...", html: "..." });
-        console.info("[better-auth] mock verification email", { email: user.email, url });
-        return Promise.resolve();
+      sendVerificationEmail: async ({ user, url }) => {
+        // Never log verification URLs or tokens: they can grant account access.
+        await sendEmailVerificationLink({ email: user.email, url });
       }
     },
     socialProviders,
