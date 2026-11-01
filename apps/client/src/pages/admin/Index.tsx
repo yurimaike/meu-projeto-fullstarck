@@ -98,7 +98,7 @@ function AdminContent() {
   }
 
   async function removeAuthorisedEmail(email: string) {
-    if (!window.confirm(`Remover a autorização de ${email}? A pessoa perderá o acesso ao site, inclusive sessões abertas. A conta não será apagada.`)) return;
+    if (!window.confirm(`Remover a autorização de ${email}? A pessoa perderá o acesso autenticado às áreas internas e as sessões serão encerradas. A conta não será apagada; ela ainda poderá usar o site como cliente e fazer reservas públicas.`)) return;
     try {
       const response = await apiFetch(`/email-authorizations/${encodeURIComponent(email)}`, { method: "DELETE" });
       const payload = await response.json() as Payload<unknown>;
@@ -245,7 +245,7 @@ function AdminContent() {
 
           <section className="mb-7 rounded-3xl border border-[#e8d9cb] bg-white p-5 shadow-[0_12px_35px_rgba(92,65,43,0.06)] sm:p-7">
             <h2 className="font-serif text-2xl text-[#493629]">E-mails autorizados</h2>
-            <p className="mt-1 text-sm text-[#8c7767]">Cadastre aqui os e-mails originais de funcionários, familiares ou pessoas autorizadas. Só esses endereços podem criar conta e entrar no site. Remover um e-mail bloqueia o acesso, mesmo para contas já existentes.</p>
+            <p className="mt-1 text-sm text-[#8c7767]">Cadastre aqui os e-mails originais de funcionários, familiares ou pessoas autorizadas. Só esses endereços podem criar conta e entrar nas áreas autenticadas. Remover um e-mail encerra o acesso de funcionário, mesmo em contas existentes; a pessoa ainda poderá consultar serviços e fazer reservas públicas como cliente.</p>
             <form onSubmit={addAuthorisedEmail} className="mt-4 flex flex-col gap-3 sm:flex-row">
               <input type="email" required maxLength={254} value={authorisedEmailInput} onChange={event => setAuthorisedEmailInput(event.target.value)} placeholder="nome@gmail.com" className="min-w-0 flex-1 rounded-xl border border-[#dfcdbd] bg-white px-4 py-3 text-sm text-[#493629] outline-none focus:border-[#a77d60]" />
               <button type="submit" className="rounded-full bg-[#705844] px-5 py-3 text-sm font-semibold text-white">Autorizar e-mail</button>
