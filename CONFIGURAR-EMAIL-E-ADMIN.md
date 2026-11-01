@@ -24,7 +24,7 @@ Se uma conta ainda não existir, ela precisa criar a conta primeiro; depois exec
 
 No painel administrativo, a secção **E-mails autorizados** permite adicionar ou remover endereços. O administrador deve inserir o endereço original da pessoa antes de ela criar uma conta. O cadastro por e-mail e senha só aceita endereços previamente autorizados; a comparação ignora maiúsculas e minúsculas. O fluxo de criação de conta pelo Google aplica a mesma regra.
 
-Remover uma autorização impede novos cadastros com aquele endereço, mas não apaga uma conta já criada nem impede o login por e-mail e senha dessa conta. Contas Google já existentes também continuam a poder entrar. Apenas utilizadores com papel `admin` podem consultar ou alterar a lista.
+Remover uma autorização bloqueia novos cadastros e também impede novos logins por e-mail e senha ou Google. Sessões já abertas deixam de conseguir aceder às rotas protegidas assim que a autorização é removida. A conta já criada não é apagada; fica sem acesso até que o administrador volte a autorizar o endereço. Apenas utilizadores com papel `admin` podem consultar ou alterar a lista.
 
 A migration `apps/server/migrations/002_authorized_emails.sql` cria a lista de autorizações. A primeira conta administrativa continua a ser promovida por um operador autorizado, conforme a secção acima; depois disso, os administradores gerem os e-mails pelo painel.
 
