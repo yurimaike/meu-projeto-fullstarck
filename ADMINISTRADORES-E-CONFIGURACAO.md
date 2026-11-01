@@ -5,7 +5,8 @@
 Os administradores devem criar as suas contas pela página `/auth`. Para proteger a privacidade, os e-mails administrativos não são publicados neste documento. Um operador autorizado deve executar o SQL de promoção usando os endereços aprovados, guardados fora do repositório público:
 
 ```sql
--- Substitua pelos e-mails administrativos autorizados, fora do repositório público.\nUPDATE user SET role = 'admin' WHERE lower(email) IN ('admin1@example.com', 'admin2@example.com');
+-- Substitua pelos e-mails administrativos autorizados, fora do repositório público.
+UPDATE user SET role = 'admin' WHERE lower(email) IN ('admin1@example.com', 'admin2@example.com');
 ```
 
 As contas autorizadas recebem permissões equivalentes no painel `/admin`. Não existe cadastro público de administradores e não se deve compartilhar senhas.
