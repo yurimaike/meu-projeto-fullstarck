@@ -1,6 +1,6 @@
 import { env } from "../_core/env";
 
-const ADMIN_EMAILS = ["yurimaike123@gmail.com", "leticia.silvalb.11296@gmail.com"];
+const ADMIN_EMAILS = env.BOOKING_ADMIN_EMAILS;
 type BookingMail = {
   bookingCode: string; customerName: string; customerEmail: string; customerPhone: string;
   bookingDate: string; bookingTime: string; service: string; status?: string; note?: string;
@@ -12,10 +12,10 @@ function escapeHtml(value: string) {
 
 async function sendEmail(to: string[], subject: string, html: string) {
   if (!env.RESEND_API_KEY || !env.EMAIL_FROM) {
-    console.warn("[booking-email] E-mail não enviado: configure RESEND_API_KEY e EMAIL_FROM.", { to, subject });
+    console.warn("[booking-email] E-mail não enviado: configure RESEND_API_KEY e EMAIL_FROM.");
     return false;
   }
-  const response = await fetch("https://api.resend.com/emails", {
+  if (to.length === 0) {\n    console.warn("[booking-email] E-mail não enviado: destinatários não configurados.");\n    return false;\n  }\n  const response = await fetch("https://api.resend.com/emails", {
     method: "POST",
     headers: { Authorization: `Bearer ${env.RESEND_API_KEY}`, "Content-Type": "application/json" },
     body: JSON.stringify({ from: env.EMAIL_FROM, to, subject, html })
