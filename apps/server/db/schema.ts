@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { index, integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import { index, integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
 export const user = sqliteTable("user", {
   id: text("id").primaryKey(),
@@ -43,7 +43,10 @@ export const account = sqliteTable("account", {
   password: text("password"),
   createdAt: integer("createdAt", { mode: "timestamp" }).notNull(),
   updatedAt: integer("updatedAt", { mode: "timestamp" }).notNull()
-});
+}, (table) => [
+  uniqueIndex("uq_account_provider_account").on(table.providerId, table.accountId),
+  uniqueIndex("uq_account_user_provider").on(table.userId, table.providerId)
+]);
 
 export const verification = sqliteTable("verification", {
   id: text("id").primaryKey(),

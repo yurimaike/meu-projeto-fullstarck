@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { CalendarDays, Check, Clock3, Mail, Phone, RefreshCw, ShieldCheck, X } from "lucide-react";
 import { apiFetch } from "@/lib/api";
 import { AdminGuard } from "@/components/auth/AdminGuard";
@@ -40,6 +40,8 @@ function AdminContent() {
   const [serviceChoices] = useState(["Manicure e pedicure", "Esmaltação em gel", "Banho de gel", "Manutenção"]);
   const [redeemChoices, setRedeemChoices] = useState<Record<string, string>>({});
   const [redeemBookingChoices, setRedeemBookingChoices] = useState<Record<string, string>>({});
+  const [authorisedEmails, setAuthorisedEmails] = useState<Array<{ email: string; createdAt: number }>>([]);
+  const [authorisedEmailInput, setAuthorisedEmailInput] = useState("");
 
   async function refresh() {
     setRefreshing(true);
@@ -65,7 +67,49 @@ function AdminContent() {
     } catch { /* agenda continua disponível mesmo se o painel de fidelidade falhar */ }
   }
 
-  useEffect(() => { void refresh(); }, []);
+  async function refreshAuthorisedEmails() {
+    try {
+      const response = await apiFetch("/email-authorizations");
+      const payload = await response.json() as Payload<{ emails: Array<{ email: string; createdAt: number }> }>;
+      if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível carregar os e-mails autorizados.");
+      setAuthorisedEmails(payload.data?.emails ?? []);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Erro ao carregar e-mails autorizados.");
+    }
+  }
+
+  async function addAuthorisedEmail(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const email = authorisedEmailInput.trim().toLowerCase();
+    if (!email) return;
+    try {
+      const response = await apiFetch("/email-authorizations", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email })
+      });
+      const payload = await response.json() as Payload<{ email: string }>;
+      if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível autorizar o e-mail.");
+      setAuthorisedEmailInput("");
+      await refreshAuthorisedEmails();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Erro ao autorizar e-mail.");
+    }
+  }
+
+  async function removeAuthorisedEmail(email: string) {
+    if (!window.confirm(`Remover a autorização de ${email}? A pessoa perderá o acesso autenticado às áreas internas e as sessões serão encerradas. A conta não será apagada; ela ainda poderá usar o site como cliente e fazer reservas públicas.`)) return;
+    try {
+      const response = await apiFetch(`/email-authorizations/${encodeURIComponent(email)}`, { method: "DELETE" });
+      const payload = await response.json() as Payload<unknown>;
+      if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível remover a autorização.");
+      await refreshAuthorisedEmails();
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Erro ao remover autorização.");
+    }
+  }
+
+  useEffect(() => { void refresh(); void refreshAuthorisedEmails(); }, []);
 
   async function decide(booking: Booking, action: "confirmed" | "rejected" | "cancelled") {
     setBusy(booking.id);
@@ -197,6 +241,19 @@ function AdminContent() {
             </div>
             <div className="mt-5 flex flex-wrap items-center gap-3 rounded-2xl bg-[#fbf6f0] p-4"><label className="text-sm font-medium text-[#705844]">Validade padrão dos novos bônus <select value={loyalty.validityMonths} onChange={event => void saveLoyaltyValidity(Number(event.target.value))} className="ml-2 rounded-xl border border-[#dfcdbd] bg-white px-3 py-2">{Array.from({ length: 60 }, (_, index) => index + 1).map(months => <option key={months} value={months}>{months} {months === 1 ? "mês" : "meses"}</option>)}</select></label><span className="text-xs text-[#8c7767]">Cada bônus pode ter prazo próprio, ajustado pela Letícia.</span></div><div className="mt-5 grid gap-3 sm:grid-cols-2"><div className="rounded-2xl bg-[#fbf6f0] p-4"><p className="text-sm text-[#8c7767]">Bônus disponíveis</p><p className="mt-1 font-serif text-3xl text-[#493629]">{loyalty.rewards.filter(r => r.status === "earned").length}</p></div><div className="rounded-2xl bg-[#fbf6f0] p-4"><p className="text-sm text-[#8c7767]">Bônus já utilizados</p><p className="mt-1 font-serif text-3xl text-[#493629]">{loyalty.rewards.filter(r => r.status === "redeemed").length}</p></div></div>
             <div className="mt-5 space-y-3">{loyalty.rewards.map(reward => <div key={reward.id} className="flex flex-col gap-3 rounded-xl border border-[#eaded3] p-4 sm:flex-row sm:items-center sm:justify-between"><div><p className="font-semibold text-[#493629]">{reward.customerName}</p><p className="text-xs text-[#8c7767]">{reward.customerEmail} · Ciclo {reward.cycleNumber} · {reward.status === "earned" ? `Vence em: ${reward.expiresAt ? new Date(reward.expiresAt).toLocaleDateString("pt-BR") : "sem prazo definido"}` : `Utilizado: ${reward.redeemedService ?? "serviço"}`}</p></div>{reward.status === "earned" && <div className="flex flex-wrap gap-2"><button type="button" onClick={() => void adjustRewardValidity(reward)} className="rounded-full border border-[#d9c4b1] bg-white px-3 py-2 text-xs font-semibold text-[#705844]">Ajustar validade</button><select aria-label={`Reserva para resgate de ${reward.customerName}`} value={redeemBookingChoices[reward.id] || ""} onChange={event => setRedeemBookingChoices(old => ({ ...old, [reward.id]: event.target.value }))} className="rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm text-[#493629]"><option value="">Escolher reserva aprovada</option>{items.filter(item => item.customerEmail.toLowerCase() === reward.customerEmail.toLowerCase() && item.status === "confirmed").map(item => <option key={item.id} value={item.id}>{item.bookingDate} · {item.bookingTime} · {item.service}</option>)}</select><select aria-label={`Serviço gratuito de ${reward.customerName}`} value={redeemChoices[reward.id] || serviceChoices[0]} onChange={event => setRedeemChoices(old => ({ ...old, [reward.id]: event.target.value }))} className="rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm text-[#493629]">{serviceChoices.map(service => <option key={service}>{service}</option>)}</select><button type="button" onClick={() => void redeemReward(reward)} className="rounded-full bg-[#6d8267] px-4 py-2 text-sm font-semibold text-white">Confirmar resgate</button></div>}</div>)}</div>
+          </section>
+
+          <section className="mb-7 rounded-3xl border border-[#e8d9cb] bg-white p-5 shadow-[0_12px_35px_rgba(92,65,43,0.06)] sm:p-7">
+            <h2 className="font-serif text-2xl text-[#493629]">E-mails autorizados</h2>
+            <p className="mt-1 text-sm text-[#8c7767]">Cadastre aqui os e-mails originais de funcionários, familiares ou pessoas autorizadas. Só esses endereços podem criar conta e entrar nas áreas autenticadas. Remover um e-mail encerra o acesso de funcionário, mesmo em contas existentes; a pessoa ainda poderá consultar serviços e fazer reservas públicas como cliente.</p>
+            <form onSubmit={addAuthorisedEmail} className="mt-4 flex flex-col gap-3 sm:flex-row">
+              <input type="email" required maxLength={254} value={authorisedEmailInput} onChange={event => setAuthorisedEmailInput(event.target.value)} placeholder="nome@gmail.com" className="min-w-0 flex-1 rounded-xl border border-[#dfcdbd] bg-white px-4 py-3 text-sm text-[#493629] outline-none focus:border-[#a77d60]" />
+              <button type="submit" className="rounded-full bg-[#705844] px-5 py-3 text-sm font-semibold text-white">Autorizar e-mail</button>
+            </form>
+            <div className="mt-4 space-y-2">
+              {authorisedEmails.map(item => <div key={item.email} className="flex flex-col gap-2 rounded-xl border border-[#eaded3] px-4 py-3 sm:flex-row sm:items-center sm:justify-between"><span className="break-all text-sm text-[#493629]">{item.email}</span><button type="button" onClick={() => void removeAuthorisedEmail(item.email)} className="w-fit rounded-full border border-[#e3c8c0] px-3 py-1.5 text-xs font-semibold text-[#9b594c]">Remover autorização</button></div>)}
+              {authorisedEmails.length === 0 && <p className="rounded-xl bg-[#fbf6f0] px-4 py-5 text-sm text-[#8c7767]">Nenhum e-mail autorizado ainda.</p>}
+            </div>
           </section>
 
           <section className="rounded-3xl border border-[#e8d9cb] bg-white p-5 shadow-[0_12px_35px_rgba(92,65,43,0.06)] sm:p-7">

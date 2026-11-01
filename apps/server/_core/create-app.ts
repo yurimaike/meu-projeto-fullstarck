@@ -23,9 +23,25 @@ app.use(
 );
 
 app.options("/api/auth/*", (c) => c.body(null, 204));
-app.on(["GET", "POST"], "/api/auth/*", (c) => {
+app.on(["GET", "POST"], "/api/auth/*", async (c) => {
   if (!isDatabaseConfigured()) {
     return c.json(apiFailure("DATABASE_UNCONFIGURED", "Skybase database runtime env is not configured"), 503);
+  }
+
+  // Every email/password sign-in and sign-up requires current admin authorisation.
+  // Removing an address therefore blocks both future logins and account creation.
+  const authPath = new URL(c.req.url).pathname;
+  if (c.req.method === "POST" && ["/api/auth/sign-up/email", "/api/auth/sign-in/email"].includes(authPath)) {
+    const body = await c.req.raw.clone().json().catch(() => null) as { email?: unknown } | null;
+    const email = typeof body?.email === "string" ? body.email.trim().toLowerCase() : "";
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return c.json(apiFailure("INVALID_EMAIL", "Informe um e-mail válido."), 400);
+    }
+    const { executeSql } = await import("./db");
+    const authorised = await executeSql("SELECT email FROM authorized_emails WHERE email = ? LIMIT 1", [email]);
+    if (authorised.rows.length === 0) {
+      return c.json(apiFailure("EMAIL_NOT_AUTHORIZED", "Este e-mail ainda não foi autorizado pelo administrador."), 403);
+    }
   }
 
   return getAuth().handler(c.req.raw);

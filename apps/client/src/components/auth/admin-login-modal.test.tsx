@@ -36,7 +36,7 @@ function renderSite() {
       </Routes>
     </MemoryRouter>
   );
-  fireEvent.click(screen.getByRole("button", { name: "Área administrativa" }));
+  fireEvent.click(screen.getByRole("button", { name: "Admin" }));
 }
 
 function submitLogin() {
@@ -71,7 +71,7 @@ describe("acesso administrativo pelo menu", () => {
     fireEvent.click(screen.getByRole("button", { name: "Fechar" }));
     expect(screen.queryByRole("dialog")).toBeNull();
     expect(screen.getByText("Site público")).not.toBeNull();
-    fireEvent.click(screen.getByRole("button", { name: "Área administrativa" }));
+    fireEvent.click(screen.getByRole("button", { name: "Admin" }));
     expect((screen.getByLabelText("Senha") as HTMLInputElement).value).toBe("");
   });
 

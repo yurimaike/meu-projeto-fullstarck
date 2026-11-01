@@ -160,6 +160,22 @@ describe("todos.route: isolation between users", () => {
   });
 });
 
+
+describe("todos.route: request size protection", () => {
+  it("rejects oversized authenticated todo payloads before validation", async () => {
+    const { token } = await signUpAndGetToken(app);
+    const body = JSON.stringify({ title: "x".repeat(50_001) });
+    const res = await fetchWithAuth(app, token, "/api/todos", {
+      method: "POST",
+      body
+    });
+
+    expect(res.status).toBe(413);
+    const payload = await res.json() as { error?: { code?: string } };
+    expect(payload.error?.code).toBe("PAYLOAD_TOO_LARGE");
+  });
+});
+
 describe("todos.route: input validation", () => {
   it("POST with empty title → 400", async () => {
     const { token } = await signUpAndGetToken(app);

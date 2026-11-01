@@ -20,6 +20,7 @@ import { executeSql } from "../_core/db";
 vi.hoisted(() => {
   process.env.SKYWORK_GATEWAY_BASE_URL = "https://gateway.test";
   process.env.SKYWORK_API_TOKEN = "test-gateway-callback-token";
+  process.env.ALLOWED_ORIGINS = "http://localhost:3000,https://site.example";
 });
 
 const GATEWAY_TOKEN = "test-gateway-callback-token";
@@ -74,7 +75,15 @@ const GOOGLE_USER = {
   picture: "https://lh3.example/avatar.png"
 };
 
+async function authorizeGoogleEmail(email = "portal.owner@example.com") {
+  await executeSql(
+    "INSERT INTO authorized_emails (email, createdBy, createdAt) VALUES (?, ?, ?) ON CONFLICT(email) DO NOTHING",
+    [email.toLowerCase(), "test-fixture", Math.floor(Date.now() / 1000)]
+  );
+}
+
 async function completeCallback(landingPath = "/admin") {
+  await authorizeGoogleEmail();
   const res = await app.fetch(
     jsonRequest("/api/third-party-google-auth/callback", {
       user: GOOGLE_USER,
@@ -127,11 +136,46 @@ describe("third-party-google-auth: start", () => {
     expect(sent.return_path).toBe("/api/third-party-google-auth/callback?landing_path=%2Fadmin");
   });
 
+  it("rejects an origin outside the configured allowlist before contacting the gateway", async () => {
+    const gateway = stubGatewayStart();
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/start", {
+        origin: "https://attacker.example",
+        landing_path: "/"
+      })
+    );
+    expect(res.status).toBe(400);
+    expect(gateway).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["HTTP URL", "http://accounts.google.com/o/oauth2/v2/auth"],
+    ["lookalike hostname", "https://accounts.google.com.attacker.example/auth"],
+    ["credentials in URL", "https://user:pass@accounts.google.com/auth"],
+    ["unexpected host", "https://attacker.example/auth"]
+  ])("rejects an unsafe gateway auth_url (%s)", async (_label, authUrl) => {
+    const gateway = stubGatewayStart({
+      body: { code: 0, message: "ok", data: { auth_url: authUrl, state: "st-1" } }
+    });
+
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/start", {
+        origin: "https://site.example",
+        landing_path: "/"
+      })
+    );
+
+    expect(res.status).toBe(502);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("THIRD_PARTY_GOOGLE_AUTH_START_FAILED");
+    expect(gateway).toHaveBeenCalledTimes(1);
+  });
+
   it("maps a gateway failure to 502 without leaking the flow", async () => {
     stubGatewayStart({ status: 500, body: { code: 1, message: "boom" } });
 
     const res = await app.fetch(
-      jsonRequest("/api/third-party-google-auth/start", { landing_path: "/" })
+      jsonRequest("/api/third-party-google-auth/start", { origin: "https://site.example", landing_path: "/" })
     );
 
     expect(res.status).toBe(502);
@@ -161,6 +205,45 @@ describe("third-party-google-auth: callback", () => {
     expect(sessions.rows.map((r) => String(r.token))).toContain(token);
   });
 
+  it("rejects replacing the Google subject already linked to an email", async () => {
+    await completeCallback();
+
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/callback", {
+        user: { ...GOOGLE_USER, sub: "different-google-subject" },
+        token: GATEWAY_TOKEN,
+        landing_path: "/admin"
+      })
+    );
+
+    expect(res.status).toBe(409);
+    const accounts = await executeSql(
+      "SELECT accountId FROM account WHERE providerId = ?",
+      ["skywork-google"]
+    );
+    expect(accounts.rows.map((row) => String(row.accountId))).toEqual(["google-sub-123"]);
+  });
+
+  it("rejects linking a Google subject already owned by a different email", async () => {
+    await completeCallback();
+    await authorizeGoogleEmail("another.person@example.com");
+
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/callback", {
+        user: { ...GOOGLE_USER, email: "another.person@example.com" },
+        token: GATEWAY_TOKEN,
+        landing_path: "/admin"
+      })
+    );
+
+    expect(res.status).toBe(409);
+    const users = await executeSql(
+      "SELECT id FROM user WHERE email = ?",
+      ["another.person@example.com"]
+    );
+    expect(users.rows.length).toBe(0);
+  });
+
   it("reuses the existing user on repeat sign-in instead of duplicating", async () => {
     await completeCallback();
     await completeCallback();
@@ -169,6 +252,40 @@ describe("third-party-google-auth: callback", () => {
       "portal.owner@example.com"
     ]);
     expect(users.rows.length).toBe(1);
+  });
+
+  it("blocks Google sign-in for an existing account after its authorisation is revoked", async () => {
+    const { token, path, ts, sig } = await completeCallback("/admin");
+    await executeSql("DELETE FROM authorized_emails WHERE email = ?", ["portal.owner@example.com"]);
+
+    const callback = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/callback", {
+        user: GOOGLE_USER,
+        token: GATEWAY_TOKEN,
+        landing_path: "/admin"
+      })
+    );
+    expect(callback.status).toBe(403);
+
+    const verify = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/verify", { path, token, ts, sig })
+    );
+    expect(verify.status).toBe(401);
+  });
+
+  it("blocks a new Google account when its email was not authorised by an admin", async () => {
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/callback", {
+        user: GOOGLE_USER,
+        token: GATEWAY_TOKEN,
+        landing_path: "/"
+      })
+    );
+    expect(res.status).toBe(403);
+    const body = await res.json() as { error?: { code?: string } };
+    expect(body.error?.code).toBe("EMAIL_NOT_AUTHORIZED");
+    const users = await executeSql("SELECT id FROM user WHERE email = ?", ["portal.owner@example.com"]);
+    expect(users.rows).toHaveLength(0);
   });
 
   it("rejects a callback whose shared token does not match → 401", async () => {
@@ -194,6 +311,24 @@ describe("third-party-google-auth: callback", () => {
     const body = (await res.json()) as { error?: { code?: string } };
     expect(body.error?.code).toBe("THIRD_PARTY_GOOGLE_AUTH_INVALID_USER");
   });
+
+  it.each([
+    ["false", { ...GOOGLE_USER, email_verified: false }, "portal.owner@example.com"],
+    ["missing", { sub: "google-sub-unverified", email: "unverified@example.com", name: "Unverified User" }, "unverified@example.com"]
+  ] as const)("rejects a Google user whose email verification is %s → 403", async (_label, user, email) => {
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/callback", {
+        user,
+        token: GATEWAY_TOKEN
+      })
+    );
+    expect(res.status).toBe(403);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("THIRD_PARTY_GOOGLE_AUTH_EMAIL_NOT_VERIFIED");
+
+    const users = await executeSql("SELECT id FROM user WHERE email = ?", [email]);
+    expect(users.rows.length).toBe(0);
+  });
 });
 
 describe("third-party-google-auth: verify", () => {
@@ -206,6 +341,19 @@ describe("third-party-google-auth: verify", () => {
 
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, data: { ok: true } });
+  });
+
+  it("rejects a correctly signed login token after its session is revoked", async () => {
+    const { path, token, ts, sig } = await completeCallback("/admin");
+    await executeSql("DELETE FROM session WHERE token = ?", [token]);
+
+    const res = await app.fetch(
+      jsonRequest("/api/third-party-google-auth/verify", { path, token, ts, sig })
+    );
+
+    expect(res.status).toBe(401);
+    const body = (await res.json()) as { error?: { code?: string } };
+    expect(body.error?.code).toBe("INVALID_LOGIN_TOKEN");
   });
 
   it("rejects a tampered signature → 401", async () => {

@@ -148,6 +148,7 @@ export const env = {
   R2_ACCESS_KEY_ID: r2AccessKeyId,
   R2_SECRET_ACCESS_KEY: r2SecretAccessKey,
   R2_BUCKET: r2Bucket,
+  BOOKING_ADMIN_EMAILS: (readEnv(process.env.BOOKING_ADMIN_EMAILS) ?? "").split(",").map((email) => email.trim().toLowerCase()).filter(Boolean),
   GOOGLE_CLIENT_ID:
     readEnv(process.env.GOOGLE_CLIENT_ID, process.env.VITE_GOOGLE_CLIENT_ID, viteEnv.VITE_GOOGLE_CLIENT_ID) ?? "",
   GOOGLE_CLIENT_SECRET: readEnv(process.env.GOOGLE_CLIENT_SECRET) ?? "",

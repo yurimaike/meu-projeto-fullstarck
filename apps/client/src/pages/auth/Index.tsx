@@ -263,7 +263,7 @@ const AuthPage = () => {
         <CardHeader className="pt-6 text-center">
           <CardTitle>{mode === "signup" ? "Criar sua conta" : "Bem-vinda!"}</CardTitle>
           <CardDescription>
-            {mode === "signup" ? "Cadastre-se para começar." : "Entre na sua conta."}
+            {mode === "signup" ? "Use o e-mail autorizado pela equipe para criar sua conta." : "Entre na sua conta."}
           </CardDescription>
         </CardHeader>
         <CardContent>

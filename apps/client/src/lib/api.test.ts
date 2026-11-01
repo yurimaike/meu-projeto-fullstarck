@@ -157,9 +157,9 @@ describe("callPlatformAI", () => {
     await expect(callPlatformAI({ scene_key: "translation", messages })).resolves.toBe("Bonjour.");
 
     const [url, init] = mock.mock.calls[0] as [string, RequestInit];
-    expect(String(url)).toContain("/api/ai");
+    expect(String(url)).toContain("/api/commercial-assistant");
     const headers = new Headers(init.headers);
-    expect(headers.get("Authorization")).toBe("Bearer client-session-token");
+    expect(headers.has("Authorization")).toBe(false);
     expect(headers.has("X-Skywork-Api-Token")).toBe(false);
     expect(headers.has("x-skywork-billing-source")).toBe(false);
     expect(headers.has("X-Skywork-Scene")).toBe(false);
@@ -219,7 +219,7 @@ describe("callPlatformAI", () => {
 
     expect(contents).toEqual(["你", "好"]);
     const [url, init] = mock.mock.calls[0];
-    expect(String(url)).toContain("/api/ai");
+    expect(String(url)).toContain("/api/commercial-assistant");
     expect(JSON.parse(String(init?.body))).toEqual({
       scene_key: "chat",
       messages,

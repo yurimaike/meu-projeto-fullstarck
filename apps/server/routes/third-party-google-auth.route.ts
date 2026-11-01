@@ -10,6 +10,9 @@ import {
   type GoogleUser
 } from "../services/third-party-google-auth";
 import { DatabaseError } from "../_core/db";
+import { getAllowedOrigin } from "../_core/env";
+import { bodySizeLimit } from "../middlewares/body-size-limit";
+import { distributedRateLimit, ipRateLimitCounter } from "../middlewares/distributed-rate-limit";
 
 export const isPublic = true;
 
@@ -33,18 +36,38 @@ const VerifySchema = z.object({
 
 export const thirdPartyGoogleAuthRouter = new Hono();
 
+const startRateLimit = distributedRateLimit((c) => [
+  ipRateLimitCounter(c, "google-auth:start-ip", 10, 60)
+]);
+const callbackRateLimit = distributedRateLimit((c) => [
+  ipRateLimitCounter(c, "google-auth:callback-ip", 30, 60)
+]);
+const verifyRateLimit = distributedRateLimit((c) => [
+  ipRateLimitCounter(c, "google-auth:verify-ip", 60, 60)
+]);
+
+function parsedBody(c: import("hono").Context) {
+  const raw = c.get("rawBody") as Uint8Array | undefined;
+  if (!raw) return null;
+  try { return JSON.parse(new TextDecoder().decode(raw)) as unknown; } catch { return null; }
+}
+
 thirdPartyGoogleAuthRouter.get("/config", (c) => {
   return c.json(apiSuccess({ enabled: isThirdPartyGoogleAuthConfigured() }));
 });
 
-thirdPartyGoogleAuthRouter.post("/start", async (c) => {
-  const parsed = StartSchema.safeParse(await c.req.json().catch(() => ({})));
+thirdPartyGoogleAuthRouter.post("/start", startRateLimit, bodySizeLimit, async (c) => {
+  const parsed = StartSchema.safeParse(parsedBody(c) ?? {});
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid third-party Google auth start input"), 400);
   }
 
   const requestUrl = new URL(c.req.url);
-  const origin = parsed.data.origin ?? c.req.header("Origin") ?? requestUrl.origin;
+  const requestedOrigin = parsed.data.origin ?? c.req.header("Origin") ?? requestUrl.origin;
+  const origin = getAllowedOrigin(requestedOrigin);
+  if (!origin) {
+    return c.json(apiFailure("INVALID_ORIGIN", "Google sign-in origin is not allowed"), 400);
+  }
   // Gateway calls this backend return_path after Google auth, then uses our landing_path for the frontend redirect.
   const returnPath = callbackPathWithLandingPath(parsed.data.landing_path ?? "/");
 
@@ -56,8 +79,8 @@ thirdPartyGoogleAuthRouter.post("/start", async (c) => {
   }
 });
 
-thirdPartyGoogleAuthRouter.post("/callback", async (c) => {
-  const parsed = CallbackSchema.safeParse(await c.req.json().catch(() => null));
+thirdPartyGoogleAuthRouter.post("/callback", callbackRateLimit, bodySizeLimit, async (c) => {
+  const parsed = CallbackSchema.safeParse(parsedBody(c));
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid third-party Google auth callback input"), 400);
   }
@@ -82,8 +105,8 @@ thirdPartyGoogleAuthRouter.post("/callback", async (c) => {
   }
 });
 
-thirdPartyGoogleAuthRouter.post("/verify", async (c) => {
-  const parsed = VerifySchema.safeParse(await c.req.json().catch(() => null));
+thirdPartyGoogleAuthRouter.post("/verify", verifyRateLimit, bodySizeLimit, async (c) => {
+  const parsed = VerifySchema.safeParse(parsedBody(c));
   if (!parsed.success) {
     return c.json(apiFailure("INVALID_INPUT", "Invalid third-party Google auth verification input"), 400);
   }
@@ -102,7 +125,7 @@ function googleAuthError(error: unknown) {
   }
 
   if (error instanceof DatabaseError) {
-    return Response.json(apiFailure(error.code, error.message), { status: error.status === 503 ? 503 : 502 });
+    return Response.json(apiFailure(error.code, error.message), { status: error.status === 503 || error.status === 409 ? error.status : 502 });
   }
 
   throw error;

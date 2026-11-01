@@ -1,4 +1,4 @@
-import type { Context, MiddlewareHandler } from "hono";
+import type { MiddlewareHandler } from "hono";
 import { apiFailure } from "@repo/shared/http";
 
 const MAX_BODY_BYTES = 50_000;
@@ -6,9 +6,12 @@ const MAX_BODY_BYTES = 50_000;
 export const bodySizeLimit: MiddlewareHandler = async (c, next) => {
   // 1. Verificar Content-Length antes de ler qualquer byte do corpo
   const contentLength = c.req.header("content-length");
-  if (contentLength) {
-    const size = parseInt(contentLength, 10);
-    if (!isNaN(size) && size > MAX_BODY_BYTES) {
+  if (contentLength !== undefined) {
+    const size = Number(contentLength);
+    if (!Number.isSafeInteger(size) || size < 0) {
+      return c.json(apiFailure("INVALID_CONTENT_LENGTH", "Tamanho da requisição inválido"), 400);
+    }
+    if (size > MAX_BODY_BYTES) {
       return c.json(
         apiFailure("PAYLOAD_TOO_LARGE", "Corpo da requisição excede o limite de 50.000 bytes"),
         413
@@ -65,6 +68,12 @@ export const bodySizeLimit: MiddlewareHandler = async (c, next) => {
 
   // 5. Armazenar corpo lido no contexto para o handler usar sem reler o stream
   c.set("rawBody", allBytes);
+  // Restore the consumed stream so handlers that call c.req.json() keep working.
+  c.req.raw = new Request(c.req.raw.url, {
+    method: c.req.raw.method,
+    headers: c.req.raw.headers,
+    body: allBytes
+  });
   return next();
 };
 

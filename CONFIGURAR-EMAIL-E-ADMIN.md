@@ -2,12 +2,12 @@
 
 ## Painel administrativo
 
-Os dois utilizadores devem existir primeiro por meio do cadastro normal do sistema. Depois, no banco SQLite/LibSQL de produção, atribua o papel de administrador aos dois e-mails:
+As contas administrativas devem existir primeiro por meio do cadastro normal. Por privacidade, não publique os e-mails reais dos administradores. No banco SQLite/LibSQL de produção, um operador autorizado deve substituir os endereços de exemplo abaixo pelos endereços aprovados, sem guardar os reais neste documento público:
 
 ```sql
 UPDATE user SET role = 'admin' WHERE lower(email) IN (
-  'yurimaike123@gmail.com',
-  'leticia.silvalb.11296@gmail.com'
+  'admin1@example.com',
+  'admin2@example.com'
 );
 ```
 
@@ -15,10 +15,18 @@ Confirme que as duas contas foram encontradas:
 
 ```sql
 SELECT id, name, email, role FROM user
-WHERE lower(email) IN ('yurimaike123@gmail.com', 'leticia.silvalb.11296@gmail.com');
+WHERE lower(email) IN ('admin1@example.com', 'admin2@example.com');
 ```
 
 Se uma conta ainda não existir, ela precisa criar a conta primeiro; depois execute novamente o UPDATE. Não compartilhe senhas no código ou neste arquivo.
+
+## Autorização de cadastro de clientes, funcionários e familiares
+
+No painel administrativo, a secção **E-mails autorizados** permite adicionar ou remover endereços. O administrador deve inserir o endereço original da pessoa antes de ela criar uma conta. O cadastro por e-mail e senha só aceita endereços previamente autorizados; a comparação ignora maiúsculas e minúsculas. O fluxo de criação de conta pelo Google aplica a mesma regra.
+
+Remover uma autorização bloqueia novos cadastros e também impede novos logins por e-mail e senha ou Google. Sessões já abertas são revogadas, e a pessoa perde o acesso às áreas autenticadas de funcionário e administração. A conta já criada não é apagada; fica sem acesso autenticado até que o administrador volte a autorizar o endereço. Isso não impede o uso público do site como cliente: qualquer pessoa, inclusive um ex-funcionário, continua podendo consultar serviços e fazer uma reserva como visitante, usando os recursos públicos de cliente. Apenas utilizadores com papel `admin` podem consultar ou alterar a lista.
+
+A migration `apps/server/migrations/002_authorized_emails.sql` cria a lista de autorizações. A primeira conta administrativa continua a ser promovida por um operador autorizado, conforme a secção acima; depois disso, os administradores gerem os e-mails pelo painel.
 
 ## E-mails automáticos
 
@@ -26,8 +34,9 @@ O projeto está preparado para enviar e-mails pelo serviço Resend. Configure es
 
 - `RESEND_API_KEY`: chave privada criada na conta Resend.
 - `EMAIL_FROM`: remetente verificado no Resend, por exemplo `Agenda Letícia <agenda@seudominio.com>`.
+- `BOOKING_ADMIN_EMAILS`: e-mails dos destinatários das notificações de reservas, separados por vírgulas; configure apenas no ambiente privado do backend.
 
-Sem essas duas variáveis, reservas e decisões continuam a ser gravadas, mas os e-mails não são enviados. O backend regista um aviso no log. A chave Resend nunca deve ser colocada no frontend.
+Sem as variáveis necessárias configuradas (`RESEND_API_KEY`, `EMAIL_FROM` e `BOOKING_ADMIN_EMAILS`), reservas e decisões continuam a ser gravadas, mas as notificações por e-mail podem não ser enviadas. O backend regista um aviso no log. A chave Resend nunca deve ser colocada no frontend.
 
 Com o provedor configurado:
 

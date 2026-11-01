@@ -1,4 +1,4 @@
-import { createAuthSessionRecord, upsertThirdPartyUser } from "../_core/db";
+import { createAuthSessionRecord, executeSql, upsertThirdPartyUser } from "../_core/db";
 import { env } from "../_core/env";
 
 const THIRD_PARTY_PROVIDER_ID = "skywork-google";
@@ -57,36 +57,73 @@ export async function startThirdPartyGoogleAuth(origin: string, returnPath: stri
   }
 
   // return_path is a backend callback path; gateway will join it with the website API host.
-  const resp = await fetch(gatewayUrl("/gateway/api/website/auth/google_start"), {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      origin,
-      return_path: returnPath
-    })
-  });
-
-  if (!resp.ok) {
-    const message = await resp.text().catch(() => resp.statusText);
+  let resp: Response;
+  try {
+    resp = await fetch(gatewayUrl("/gateway/api/website/auth/google_start"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        origin,
+        return_path: returnPath
+      }),
+      signal: AbortSignal.timeout(10_000)
+    });
+  } catch {
     throw new ThirdPartyGoogleAuthError(
       "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
-      `Third-party Google auth start failed (${resp.status}): ${message}`,
+      "Third-party Google sign-in is temporarily unavailable",
       502
     );
   }
 
-  const envelope = (await resp.json()) as GoogleStartEnvelope;
-  if (envelope.code !== 0 || !envelope.data?.auth_url) {
+  if (!resp.ok) {
+    // Do not forward upstream response bodies to the public caller.
     throw new ThirdPartyGoogleAuthError(
       "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
-      `Third-party Google auth start failed: ${envelope.message || "missing auth_url"}`,
+      "Third-party Google sign-in is temporarily unavailable",
+      502
+    );
+  }
+
+  let envelope: GoogleStartEnvelope;
+  try {
+    envelope = (await resp.json()) as GoogleStartEnvelope;
+  } catch {
+    throw new ThirdPartyGoogleAuthError(
+      "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
+      "Third-party Google sign-in is temporarily unavailable",
+      502
+    );
+  }
+
+  let authUrl: URL;
+  try {
+    authUrl = new URL(envelope.data?.auth_url ?? "");
+  } catch {
+    throw new ThirdPartyGoogleAuthError(
+      "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
+      "Third-party Google sign-in is temporarily unavailable",
+      502
+    );
+  }
+  if (
+    envelope.code !== 0 ||
+    authUrl.protocol !== "https:" ||
+    authUrl.hostname !== "accounts.google.com" ||
+    authUrl.username !== "" ||
+    authUrl.password !== ""
+  ) {
+    // Provider messages can contain internal details; keep the public error generic.
+    throw new ThirdPartyGoogleAuthError(
+      "THIRD_PARTY_GOOGLE_AUTH_START_FAILED",
+      "Third-party Google sign-in is temporarily unavailable",
       502
     );
   }
 
   return {
-    authUrl: envelope.data.auth_url,
-    state: envelope.data.state ?? "",
+    authUrl: authUrl.toString(),
+    state: envelope.data?.state ?? "",
     traceId: envelope.trace_id
   };
 }
@@ -97,6 +134,19 @@ export async function completeThirdPartyGoogleAuth(googleUser: GoogleUser, token
   }
 
   const normalizedUser = normalizeGoogleUser(googleUser);
+  // Google sign-in also requires current authorisation, even for an
+  // existing account. Removing the email blocks future Google logins.
+  const authorization = await executeSql(
+    "SELECT email FROM authorized_emails WHERE email = ? LIMIT 1",
+    [normalizedUser.email]
+  );
+  if (authorization.rows.length === 0) {
+    throw new ThirdPartyGoogleAuthError(
+      "EMAIL_NOT_AUTHORIZED",
+      "Este e-mail não está autorizado a acessar o site.",
+      403
+    );
+  }
   const dbUser = await upsertThirdPartyUser({
     providerId: THIRD_PARTY_PROVIDER_ID,
     ...normalizedUser
@@ -118,13 +168,38 @@ export async function verifySignedLoginToken(pathname: string, token: string, ts
   }
 
   const expected = await createSignature(pathname, token, ts);
-  return timingSafeEqual(signature, expected);
+  if (!timingSafeEqual(signature, expected)) {
+    return false;
+  }
+
+  // A valid HMAC alone is not enough: the associated session may have been
+  // revoked or expired since the landing URL was issued.
+  const activeSession = await executeSql(
+    `SELECT session.id
+       FROM session
+       INNER JOIN user ON user.id = session.userId
+       INNER JOIN authorized_emails ON authorized_emails.email = lower(user.email)
+      WHERE session.token = ? AND session.expiresAt > ?
+      LIMIT 1`,
+    [token, Math.floor(Date.now() / 1000)]
+  );
+  return activeSession.rows.length > 0;
 }
 
 function normalizeGoogleUser(googleUser: GoogleUser) {
   const email = typeof googleUser.email === "string" ? googleUser.email.trim().toLowerCase() : "";
   if (!email) {
     throw new ThirdPartyGoogleAuthError("THIRD_PARTY_GOOGLE_AUTH_INVALID_USER", "Google user is missing email", 400);
+  }
+
+  const emailVerified =
+    booleanValue(googleUser.email_verified) ?? booleanValue(googleUser.emailVerified) ?? false;
+  if (!emailVerified) {
+    throw new ThirdPartyGoogleAuthError(
+      "THIRD_PARTY_GOOGLE_AUTH_EMAIL_NOT_VERIFIED",
+      "Google account email must be verified",
+      403
+    );
   }
 
   const providerAccountId = stringValue(googleUser.sub) || stringValue(googleUser.id) || email;
@@ -136,7 +211,7 @@ function normalizeGoogleUser(googleUser: GoogleUser) {
   return {
     providerAccountId,
     email,
-    emailVerified: booleanValue(googleUser.email_verified) ?? booleanValue(googleUser.emailVerified) ?? true,
+    emailVerified,
     name,
     image: stringValue(googleUser.picture) || stringValue(googleUser.avatar_url) || null
   };

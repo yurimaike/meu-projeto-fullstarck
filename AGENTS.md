@@ -129,6 +129,11 @@ Server:
 
 Scaffold-provided platform services (server-only):
 
+- `services/message.ts` — email delivery helpers: `sendEmailVerificationCode`,
+  `sendGuestBookingAccessCode`, `sendEmailVerificationLink`, and
+  `sendPasswordResetEmail`. `SendVerificationLinkInput` describes the
+  verification-link payload; `SendEmailInput` describes verification-code email input.
+
 - `services/s3_storage.ts` — file storage through the platform OSS proxy:
   `storagePut(...)`, `storageGetForUser(id, userId)`, `storageDeleteForUser(id, userId)`,
   `storageGetByPath(path)`, `storageGetDownloadUrl(id)`,
