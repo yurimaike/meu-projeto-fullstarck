@@ -10,6 +10,7 @@ import {
   type GoogleUser
 } from "../services/third-party-google-auth";
 import { DatabaseError } from "../_core/db";
+import { getAllowedOrigin } from "../_core/env";
 import { bodySizeLimit } from "../middlewares/body-size-limit";
 
 export const isPublic = true;
@@ -51,7 +52,11 @@ thirdPartyGoogleAuthRouter.post("/start", bodySizeLimit, async (c) => {
   }
 
   const requestUrl = new URL(c.req.url);
-  const origin = parsed.data.origin ?? c.req.header("Origin") ?? requestUrl.origin;
+  const requestedOrigin = parsed.data.origin ?? c.req.header("Origin") ?? requestUrl.origin;
+  const origin = getAllowedOrigin(requestedOrigin);
+  if (!origin) {
+    return c.json(apiFailure("INVALID_ORIGIN", "Google sign-in origin is not allowed"), 400);
+  }
   // Gateway calls this backend return_path after Google auth, then uses our landing_path for the frontend redirect.
   const returnPath = callbackPathWithLandingPath(parsed.data.landing_path ?? "/");
 
