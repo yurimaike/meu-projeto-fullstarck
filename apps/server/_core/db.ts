@@ -177,7 +177,23 @@ export async function upsertThirdPartyUser(input: ThirdPartyUserInput): Promise<
     where: eq(userTable.email, input.email)
   });
 
+  const linkedGoogleAccount = await db.query.account.findFirst({
+    where: and(
+      eq(account.providerId, input.providerId),
+      eq(account.accountId, input.providerAccountId)
+    )
+  });
+  if (linkedGoogleAccount && linkedGoogleAccount.userId !== existing?.id) {
+    throw new DatabaseError("INVALID_INPUT", "Google account is linked to another user", 409);
+  }
+
   if (existing) {
+    const currentProviderAccount = await db.query.account.findFirst({
+      where: and(eq(account.userId, existing.id), eq(account.providerId, input.providerId))
+    });
+    if (currentProviderAccount && currentProviderAccount.accountId !== input.providerAccountId) {
+      throw new DatabaseError("INVALID_INPUT", "Google account identity mismatch", 409);
+    }
     const rows = await db
       .update(userTable)
       .set({
