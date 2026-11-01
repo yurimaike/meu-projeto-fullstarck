@@ -1,4 +1,4 @@
-import { randomBytes, randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { DatabaseError, executeSql } from "../_core/db";
 
 export const BOOKING_TIMES = ["08:00", "09:30", "11:00", "13:00", "14:30", "16:00", "17:30", "19:00"] as const;
@@ -7,15 +7,32 @@ export type BookingInput = { customerName:string; customerEmail:string; customer
 function validDate(s:string) { if (!/^\d{4}-\d{2}-\d{2}$/.test(s)) return false; const d=new Date(`${s}T12:00:00`); return !Number.isNaN(d.getTime()) && d.toISOString().slice(0,10)===s; }
 function ensureDateTime(date:string,time:string) { if(!validDate(date)) throw new DatabaseError("INVALID_INPUT","Data inválida.",400); const target=new Date(`${date}T${time}:00-03:00`); if(target.getTime()<=Date.now()) throw new DatabaseError("INVALID_INPUT","Escolha uma data e horário futuros.",400); }
 export async function listBusyTimes(date:string) { if(!validDate(date)) throw new DatabaseError("INVALID_INPUT","Data inválida.",400); const r=await executeSql("SELECT bookingTime FROM bookings WHERE bookingDate = ? AND status IN ('pending','confirmed')",[date]); return r.rows.map(x=>String(x.bookingTime)); }
-export async function createBooking(input:BookingInput, verifiedUser?:{id:string;email:string}) {
+export async function createBooking(input:BookingInput, verifiedUser?:{id:string;email:string}, idempotencyKey?:string) {
   ensureDateTime(input.bookingDate,input.bookingTime);
   if(!BOOKING_TIMES.includes(input.bookingTime)||!BOOKING_SERVICES.includes(input.service)) throw new DatabaseError("INVALID_INPUT","Serviço ou horário inválido.",400);
   const name=input.customerName.trim(); const email=input.customerEmail.trim().toLowerCase(); const phone=input.customerPhone.replace(/\D/g,"");
   if(name.length<2||name.length>120||!/^\S+@\S+\.\S+$/.test(email)||phone.length<10||phone.length>13) throw new DatabaseError("INVALID_INPUT","Confira nome, e-mail e WhatsApp.",400);
+  const requestHash = createHash("sha256").update(JSON.stringify({ customerName:name, customerEmail:email, customerPhone:phone, bookingDate:input.bookingDate, bookingTime:input.bookingTime, service:input.service })).digest("hex");
+  if (idempotencyKey) {
+    const existing = await executeSql("SELECT id,bookingCode,customerName,customerEmail,customerPhone,bookingDate,bookingTime,service,status,requestHash FROM bookings WHERE idempotencyKey = ? LIMIT 1", [idempotencyKey]);
+    const row = existing.rows[0];
+    if (row) {
+      if (String(row.requestHash) !== requestHash) throw new DatabaseError("IDEMPOTENCY_CONFLICT", "Esta solicitação já foi utilizada com dados diferentes.", 409);
+      return { id:String(row.id), bookingCode:String(row.bookingCode), customerName:String(row.customerName), customerEmail:String(row.customerEmail), customerPhone:String(row.customerPhone), bookingDate:String(row.bookingDate), bookingTime:String(row.bookingTime), service:String(row.service), status:String(row.status) };
+    }
+  }
   const id=randomUUID(); const bookingCode=`LET-${randomBytes(4).toString("hex").toUpperCase()}`;
   const userId = verifiedUser && verifiedUser.email.toLowerCase() === email ? verifiedUser.id : null;
-  try { await executeSql("INSERT INTO bookings (id,bookingCode,customerName,customerEmail,customerPhone,bookingDate,bookingTime,service,status,userId) VALUES (?,?,?,?,?,?,?,?, 'pending',?)",[id,bookingCode,name,email,phone,input.bookingDate,input.bookingTime,input.service,userId]); }
+  try { await executeSql("INSERT INTO bookings (id,bookingCode,customerName,customerEmail,customerPhone,bookingDate,bookingTime,service,status,userId,idempotencyKey,requestHash) VALUES (?,?,?,?,?,?,?,?, 'pending',?,?,?)",[id,bookingCode,name,email,phone,input.bookingDate,input.bookingTime,input.service,userId,idempotencyKey ?? null,idempotencyKey ? requestHash : null]); }
   catch(e) {
+    if (idempotencyKey) {
+      const retry = await executeSql("SELECT id,bookingCode,customerName,customerEmail,customerPhone,bookingDate,bookingTime,service,status,requestHash FROM bookings WHERE idempotencyKey = ? LIMIT 1", [idempotencyKey]);
+      const row = retry.rows[0];
+      if (row) {
+        if (String(row.requestHash) !== requestHash) throw new DatabaseError("IDEMPOTENCY_CONFLICT", "Esta solicitação já foi utilizada com dados diferentes.", 409);
+        return { id:String(row.id), bookingCode:String(row.bookingCode), customerName:String(row.customerName), customerEmail:String(row.customerEmail), customerPhone:String(row.customerPhone), bookingDate:String(row.bookingDate), bookingTime:String(row.bookingTime), service:String(row.service), status:String(row.status) };
+      }
+    }
     if (e instanceof DatabaseError && e.code === "SLOT_UNAVAILABLE") throw e;
     const msg = e instanceof DatabaseError ? e.databaseMessage : e instanceof Error ? e.message : "";
     if (/uq_bookings_active_slot|unique constraint failed:\s*bookings\.bookingDate,\s*bookings\.bookingTime/i.test(msg)) {

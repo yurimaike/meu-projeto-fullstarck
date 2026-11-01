@@ -62,6 +62,31 @@ async function command(args: Array<string | number>, fetcher: typeof fetch = fet
   return payload.result;
 }
 
+/**
+ * Atomically claims a one-time administrative plan approval.
+ * Redis SET NX makes the claim shared across backend instances; a successful
+ * claim cannot be repeated until the short approval lifetime expires.
+ */
+export async function claimAdminPlanApproval(nonce: string, ttlSeconds: number): Promise<boolean> {
+  if (!/^[A-Za-z0-9_-]{20,100}$/.test(nonce)) {
+    throw new Error("Invalid approval nonce");
+  }
+  if (!Number.isSafeInteger(ttlSeconds) || ttlSeconds < 1 || ttlSeconds > 600) {
+    throw new Error("Invalid approval TTL");
+  }
+  const result = await command([
+    "SET",
+    `leticia:admin-ai:approval-used:${nonce}`,
+    "1",
+    "NX",
+    "EX",
+    ttlSeconds
+  ]);
+  if (result === "OK") return true;
+  if (result === null) return false;
+  throw new UpstashUnavailableError();
+}
+
 export async function consumeDistributedRateLimits(
   counters: RateLimitCounter[],
   now = Date.now()

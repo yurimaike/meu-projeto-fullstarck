@@ -118,10 +118,13 @@ function extractPlatformAIContent(data: string) {
     .filter((content): content is string => typeof content === "string" && content.length > 0);
 }
 
-export async function* streamPlatformAI(input: PlatformAIChatInput): AsyncGenerator<string> {
-  const response = await apiFetch("/commercial-assistant", {
+export async function* streamPlatformAI(
+  input: PlatformAIChatInput,
+  options: { admin?: boolean } = {}
+): AsyncGenerator<string> {
+  const response = await apiFetch(options.admin ? "/ai" : "/commercial-assistant", {
     method: "POST",
-    auth: false,
+    auth: options.admin !== true ? false : true,
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ ...input, stream: true })
   });

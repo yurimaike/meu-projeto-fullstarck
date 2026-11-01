@@ -20,6 +20,24 @@ describe("bookings route", () => {
     const list = await app.fetch(new Request(`http://localhost/api/bookings?date=${date}`));
     expect(((await list.json()) as {data:{busyTimes:string[]}}).data.busyTimes).toContain("11:00");
   });
+  it("returns the original booking when the same idempotency key is retried", async () => {
+    const date = futureDate(23);
+    const input = JSON.stringify({customerName:"Retry Customer",customerEmail:"retry@example.com",customerPhone:"51988887777",bookingDate:date,bookingTime:"16:00",service:"Esmaltação em gel"});
+    const send = () => app.fetch(new Request("http://localhost/api/bookings", {
+      method:"POST",
+      headers:{"content-type":"application/json","Idempotency-Key":"booking-retry-test-key-000001"},
+      body:input
+    }));
+    const first = await send();
+    const retry = await send();
+    expect(first.status).toBe(201);
+    expect(retry.status).toBe(201);
+    const firstBody = await first.json() as {data:{id:string;bookingCode:string}};
+    const retryBody = await retry.json() as {data:{id:string;bookingCode:string}};
+    expect(retryBody.data.id).toBe(firstBody.data.id);
+    expect(retryBody.data.bookingCode).toBe(firstBody.data.bookingCode);
+  });
+
   it("blocks duplicate slots using valid customer details", async () => {
     const date = futureDate(21);
     const input = JSON.stringify({customerName:"Test User",customerEmail:"test@example.com",customerPhone:"51999999999",bookingDate:date,bookingTime:"13:00",service:"Manicure e pedicure"});

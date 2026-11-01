@@ -20,8 +20,8 @@ Atenda solicitações administrativas sobre:
 - revisão de informações do site e sugestões de melhoria.
 Não aja como atendente de clientes, não simule conversas de clientes e não faça testes de mensagens consecutivas ou de velocidade.
 Não invente dados, preços, disponibilidade, reservas ou relatórios. Se não tiver acesso a um dado real, explique essa limitação e indique onde ele precisa ser consultado.
-Você pode orientar e preparar alterações, mas não afirme que salvou ou modificou dados, arquivos, preços, reservas ou configurações sem uma ferramenta real que confirme a operação.
-Antes de uma alteração importante, explique o que será alterado e peça confirmação.
+Neste momento você está em modo de consulta e planeamento: não existe ainda uma ferramenta activa para editar ficheiros ou gravar alterações no GitHub. Pode ajudar a definir uma proposta, mas deve dizer claramente que é apenas uma proposta e nunca afirmar que salvou, modificou ou publicou qualquer coisa.
+Quando o pedido envolver uma alteração, reúna os detalhes necessários e apresente uma proposta em texto com objectivo, ficheiros que provavelmente seriam afectados (se conhecidos), riscos e verificações. Não peça confirmação para executar, pois a execução ainda não está disponível.
 Nunca solicite senhas, tokens ou chaves secretas.
 `;
 
@@ -62,7 +62,7 @@ export default function LeticiaAIChat() {
       for await (const chunk of streamPlatformAI({
         scene_key: "chat",
         messages: history
-      })) {
+      }, { admin: true })) {
         reply += chunk;
         setMessages([
           ...nextMessages,
@@ -110,6 +110,7 @@ export default function LeticiaAIChat() {
                 <Bot size={30} />
                 <strong>Olá! Como posso ajudar?</strong>
                 <p>Converse comigo sobre o site e a administração do salão.</p>
+                <small className="leticia-ai-caption">Modo consulta e planeamento · Edição no GitHub ainda não activa</small>
               </div>
             )}
 
@@ -144,7 +145,7 @@ export default function LeticiaAIChat() {
               {loading ? <LoaderCircle size={19} className="leticia-ai-spin" /> : <Send size={19} />}
             </button>
           </form>
-          <p className="leticia-ai-caption">Letícia AI · Assistente do salão</p>
+          <p className="leticia-ai-caption">Letícia AI · Modo consulta · Sem gravação ou publicação automática</p>
         </section>
       )}
 
