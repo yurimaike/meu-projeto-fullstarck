@@ -6,6 +6,7 @@ import { adminRoute } from "../_core/route-helpers";
 import { env } from "../_core/env";
 import { bodySizeLimit } from "../middlewares/body-size-limit";
 import { distributedRateLimit, identityRateLimitCounter } from "../middlewares/distributed-rate-limit";
+import { claimAdminPlanApproval } from "../services/upstash-redis";
 import {
   PlatformAIError,
   requestPlatformAIChat,
@@ -119,6 +120,39 @@ function issuePlanApproval(userId: string, digest: string) {
   return { approval_token: payload + "." + signature, expires_at: new Date(expiresAt).toISOString() };
 }
 
+function verifyPlanApproval(token: string, userId: string, digest: string) {
+  const parts = token.split(".");
+  if (parts.length !== 2) return null;
+  const [payload, suppliedSignature] = parts;
+  let expectedSignature: string;
+  try {
+    expectedSignature = createHmac("sha256", approvalSecret()).update(payload).digest("base64url");
+  } catch {
+    return null;
+  }
+  const expected = Buffer.from(expectedSignature);
+  const supplied = Buffer.from(suppliedSignature);
+  if (expected.length !== supplied.length || !require("node:crypto").timingSafeEqual(expected, supplied)) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as {
+      sub?: unknown; digest?: unknown; exp?: unknown; jti?: unknown;
+    };
+    if (
+      claims.sub !== userId ||
+      claims.digest !== digest ||
+      typeof claims.exp !== "number" ||
+      !Number.isSafeInteger(claims.exp) ||
+      claims.exp <= Date.now() ||
+      claims.exp > Date.now() + 10 * 60 * 1000 ||
+      typeof claims.jti !== "string" ||
+      !/^[0-9a-f-]{36}$/i.test(claims.jti)
+    ) return null;
+    return { jti: claims.jti, expiresAt: claims.exp };
+  } catch {
+    return null;
+  }
+}
+
 export const aiRouter = new Hono();
 const aiChatRateLimit = distributedRateLimit((c) => [
   identityRateLimitCounter("admin-ai:chat-minute", c.var.currentUser?.id, 20, 60),
@@ -228,6 +262,28 @@ const planApprovalHandler = async (c: Context) => {
 };
 
 const executePlanHandler = async (c: Context) => {
+  const parsed = z.object({
+    plan: EditPlanSchema,
+    plan_hash: z.string().regex(/^[a-f0-9]{64}$/),
+    approval_token: z.string().min(1).max(4096)
+  }).strict().safeParse(requestBody(c));
+  if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Invalid execution request"), 400);
+  if (
+    planDigest(parsed.data.plan) !== parsed.data.plan_hash ||
+    parsed.data.plan.files.some((file) => !isSafePlanPath(file.path))
+  ) {
+    return c.json(apiFailure("PLAN_CHANGED", "The plan changed or contains an unsafe path; review it again"), 409);
+  }
+  const approval = verifyPlanApproval(
+    parsed.data.approval_token,
+    c.var.currentUser.id,
+    parsed.data.plan_hash
+  );
+  if (!approval) {
+    return c.json(apiFailure("APPROVAL_INVALID", "Approval is invalid, expired, or belongs to another plan or administrator"), 403);
+  }
+  // Do not consume approval or mutate GitHub until the dedicated GitHub
+  // integration is configured. This route remains intentionally fail-closed.
   return c.json(apiFailure("EDITOR_NOT_CONFIGURED", "GitHub execution is disabled until a dedicated server-side GitHub integration is configured and tested"), 503);
 };
 
