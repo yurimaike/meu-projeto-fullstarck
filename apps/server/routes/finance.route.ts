@@ -17,6 +17,12 @@ const incomeSchema = z.object({
   amountCents: z.number().int().positive().max(100_000_000),
   transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 });
+const editSchema = z.object({
+  amountCents: z.number().int().positive().max(100_000_000),
+  category: z.string().trim().min(2).max(80),
+  description: z.string().trim().min(2).max(240),
+  transactionDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/)
+});
 function fail(c: any, error: unknown) {
   if (error instanceof DatabaseError) return c.json(apiFailure(error.code, error.message), error.status as 400|403|404|409|502|503);
   throw error;
@@ -49,6 +55,37 @@ financeRouter.post("/expenses", adminRoute, bodySizeLimit, async (c) => {
     await executeSql("INSERT INTO finance_transactions (id,type,amountCents,category,description,transactionDate,createdBy) VALUES (?,'expense',?,?,?,?,?)",
       [id, parsed.data.amountCents, parsed.data.category, parsed.data.description, parsed.data.transactionDate, user.id]);
     return c.json(apiSuccess({ id }), 201);
+  } catch (error) { return fail(c, error); }
+});
+
+financeRouter.patch("/:id", adminRoute, bodySizeLimit, async (c) => {
+  const parsed = editSchema.safeParse(await c.req.json().catch(() => null));
+  if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Confira valor, categoria, descrição e data do lançamento."), 400);
+  try {
+    const user = c.get("currentUser") as { id?: string } | undefined;
+    if (!user?.id) return c.json(apiFailure("UNAUTHENTICATED", "Sessão administrativa necessária."), 401);
+    const id = c.req.param("id");
+    const currentResult = await executeSql(
+      "SELECT id,type,amountCents,category,description,transactionDate,bookingId FROM finance_transactions WHERE id=?",
+      [id]
+    );
+    const current = currentResult.rows[0];
+    if (!current) return c.json(apiFailure("TRANSACTION_NOT_FOUND", "Lançamento não encontrado."), 404);
+    await executeSql(
+      "UPDATE finance_transactions SET amountCents=?,category=?,description=?,transactionDate=? WHERE id=?",
+      [parsed.data.amountCents, parsed.data.category, parsed.data.description, parsed.data.transactionDate, id]
+    );
+    await executeSql(
+      "INSERT INTO finance_transaction_audit (id,transactionId,changedBy,oldValues,newValues) VALUES (?,?,?,?,?)",
+      [randomUUID(), id, user.id, JSON.stringify({
+        type: current.type, amountCents: current.amountCents, category: current.category,
+        description: current.description, transactionDate: current.transactionDate
+      }), JSON.stringify({
+        type: current.type, amountCents: parsed.data.amountCents, category: parsed.data.category,
+        description: parsed.data.description, transactionDate: parsed.data.transactionDate
+      })]
+    );
+    return c.json(apiSuccess({ id }));
   } catch (error) { return fail(c, error); }
 });
 
