@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api";
 import { AdminGuard } from "@/components/auth/AdminGuard";
 import SiteLayout from "../../site/SiteLayout";
 import LeticiaAIChat from "@/components/admin/LeticiaAIChat";
+import FinancePanel from "@/components/admin/FinancePanel";
 
 type Booking = {
   id: string;
@@ -233,6 +234,8 @@ function AdminContent() {
               <p className="mt-2 font-serif text-3xl text-[#66816a]">{confirmedCount}</p>
             </div>
           </div>
+
+          <FinancePanel />
 
           <section className="mb-7 rounded-3xl border border-[#e8d9cb] bg-white p-5 shadow-[0_12px_35px_rgba(92,65,43,0.06)] sm:p-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
