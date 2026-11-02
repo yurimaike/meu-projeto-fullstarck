@@ -180,6 +180,8 @@ export default function MyBookingsPage() {
               ))}
             </div>
           )}
+
+          {isVerifiedAccount && <CustomerLoyalty />}
         </div>
       </main>
     </SiteLayout>
