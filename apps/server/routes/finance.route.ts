@@ -93,7 +93,7 @@ financeRouter.post("/bookings/:id/income", adminRoute, bodySizeLimit, async (c) 
   const parsed = incomeSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Informe o valor efetivamente recebido e a data."), 400);
   try {
-    const user = c.get("user") as { id?: string } | undefined;
+    const user = c.get("currentUser") as { id?: string } | undefined;
     if (!user?.id) return c.json(apiFailure("UNAUTHENTICATED", "Sessão administrativa necessária."), 401);
     const bookingResult = await executeSql("SELECT id,status,paymentStatus,customerName,service FROM bookings WHERE id=?", [c.req.param("id")]);
     const booking = bookingResult.rows[0];
