@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api";
 import { AdminGuard } from "@/components/auth/AdminGuard";
 import SiteLayout from "../../site/SiteLayout";
 import LeticiaAIChat from "@/components/admin/LeticiaAIChat";
+import FinancePanel from "@/components/admin/FinancePanel";
 
 type Booking = {
   id: string;
@@ -131,11 +132,28 @@ function AdminContent() {
   }
 
   async function updateBookingFlag(booking: Booking, endpoint: "payment" | "completion", value: boolean) {
+    let amountCents = 0;
+    if (endpoint === "payment" && value) {
+      const raw = window.prompt("Informe o valor realmente recebido (R$). Exemplo: 85,00");
+      if (raw === null) return;
+      amountCents = Math.round(Number(raw.trim().replace(",", ".")) * 100);
+      if (!Number.isSafeInteger(amountCents) || amountCents <= 0) {
+        setError("Informe um valor recebido válido, maior que zero.");
+        return;
+      }
+    }
     setBusy(booking.id); setError("");
     try {
       const response = await apiFetch(`/loyalty/bookings/${booking.id}/${endpoint}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify(endpoint === "payment" ? { paid: value } : { completed: value }) });
       const payload = await response.json() as Payload<unknown>;
       if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível atualizar.");
+      if (endpoint === "payment" && value) {
+        const now = new Date();
+        const transactionDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}-${String(now.getDate()).padStart(2,"0")}`;
+        const incomeResponse = await apiFetch(`/finance/bookings/${booking.id}/income`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amountCents, transactionDate }) });
+        const incomePayload = await incomeResponse.json() as Payload<unknown>;
+        if (!incomeResponse.ok || !incomePayload.ok) throw new Error("Pagamento foi marcado como recebido, mas o lançamento financeiro não foi concluído: " + (incomePayload.error?.message ?? "tente registrar a receita no painel Financeiro."));
+      }
       await refresh();
     } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao atualizar."); }
     finally { setBusy(""); }
@@ -233,6 +251,8 @@ function AdminContent() {
               <p className="mt-2 font-serif text-3xl text-[#66816a]">{confirmedCount}</p>
             </div>
           </div>
+
+          <FinancePanel />
 
           <section className="mb-7 rounded-3xl border border-[#e8d9cb] bg-white p-5 shadow-[0_12px_35px_rgba(92,65,43,0.06)] sm:p-7">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
