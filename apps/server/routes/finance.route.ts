@@ -43,7 +43,7 @@ financeRouter.post("/expenses", adminRoute, bodySizeLimit, async (c) => {
   const parsed = expenseSchema.safeParse(await c.req.json().catch(() => null));
   if (!parsed.success) return c.json(apiFailure("INVALID_INPUT", "Confira valor, categoria, descrição e data da despesa."), 400);
   try {
-    const user = c.get("user") as { id?: string } | undefined;
+    const user = c.get("currentUser") as { id?: string } | undefined;
     if (!user?.id) return c.json(apiFailure("UNAUTHENTICATED", "Sessão administrativa necessária."), 401);
     const id = randomUUID();
     await executeSql("INSERT INTO finance_transactions (id,type,amountCents,category,description,transactionDate,createdBy) VALUES (?,'expense',?,?,?,?,?)",
