@@ -8,7 +8,25 @@ type FinanceData = { incomeCents: number; expenseCents: number; balanceCents: nu
 
 const today = () => new Date().toISOString().slice(0, 10);
 const money = (cents: number) => (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-const parseAmount = (value: string) => Math.round(Number(value.replace(",", ".")) * 100);
+const normalizeMoneyInput = (value: string) => {
+  let normalized = value.replace(/[^\d.,]/g, "");
+  if (normalized.includes(",")) normalized = normalized.replace(/\./g, "");
+  else if (normalized.includes(".")) {
+    const lastDot = normalized.lastIndexOf(".");
+    const decimalPlaces = normalized.length - lastDot - 1;
+    normalized = decimalPlaces > 0 && decimalPlaces <= 2
+      ? normalized.slice(0, lastDot).replace(/\./g, "") + "," + normalized.slice(lastDot + 1)
+      : normalized.replace(/\./g, "");
+  }
+  const [whole, ...fraction] = normalized.split(",");
+  return (whole ?? "") + (normalized.includes(",") ? "," + fraction.join("").slice(0, 2) : "");
+};
+const parseAmount = (value: string) => {
+  const normalized = value.trim();
+  if (!/^\d+(?:,\d{1,2})?$/.test(normalized)) return Number.NaN;
+  return Math.round(Number(normalized.replace(",", ".")) * 100);
+};
+const cleanTextInput = (value: string) => value.replace(/[\u0000-\u001F\u007F]/g, "");
 
 export default function FinancePanel() {
   const [data, setData] = useState<FinanceData>({ incomeCents: 0, expenseCents: 0, balanceCents: 0, transactions: [] });
@@ -23,6 +41,11 @@ export default function FinancePanel() {
   const [incomeAmount, setIncomeAmount] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState<Transaction | null>(null);
+  const [editDescription, setEditDescription] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  const [editAmount, setEditAmount] = useState("");
+  const [editDate, setEditDate] = useState("");
 
   async function refresh() {
     const [financeResponse, bookingResponse] = await Promise.all([
@@ -47,9 +70,13 @@ export default function FinancePanel() {
   async function submitExpense(event: FormEvent<HTMLFormElement>) {
     event.preventDefault(); setBusy(true); setError("");
     try {
+      const cleanCategory = category.trim();
+      const cleanDescription = cleanTextInput(description).trim();
+      if (cleanCategory.length < 2 || cleanCategory.length > 80) throw new Error("A categoria deve ter entre 2 e 80 caracteres.");
+      if (cleanDescription.length < 2 || cleanDescription.length > 240) throw new Error("A descrição deve ter entre 2 e 240 caracteres.");
       const amountCents = parseAmount(amount);
       if (!Number.isSafeInteger(amountCents) || amountCents <= 0) throw new Error("Informe um valor válido maior que zero.");
-      const response = await apiFetch("/finance/expenses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amountCents, category, description, transactionDate: date }) });
+      const response = await apiFetch("/finance/expenses", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ amountCents, category: cleanCategory, description: cleanDescription, transactionDate: date }) });
       const payload = await response.json() as ApiPayload<unknown>;
       if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível registrar a despesa.");
       setAmount(""); setDescription(""); await refresh();
@@ -70,6 +97,40 @@ export default function FinancePanel() {
     finally { setBusy(false); }
   }
 
+  function startEdit(item: Transaction) {
+    setEditing(item);
+    setEditDescription(item.description);
+    setEditCategory(item.category);
+    setEditAmount((item.amountCents / 100).toFixed(2).replace(".", ","));
+    setEditDate(item.transactionDate);
+    setError("");
+  }
+
+  async function saveEdit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!editing) return;
+    const cleanDescription = cleanTextInput(editDescription).trim();
+    const cleanCategory = editCategory.trim();
+    const amountCents = parseAmount(editAmount);
+    if (cleanDescription.length < 2 || cleanDescription.length > 240) { setError("A descrição deve ter entre 2 e 240 caracteres."); return; }
+    if (cleanCategory.length < 2 || cleanCategory.length > 80) { setError("A categoria deve ter entre 2 e 80 caracteres."); return; }
+    if (!Number.isSafeInteger(amountCents) || amountCents <= 0) { setError("Informe um valor válido maior que zero."); return; }
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(editDate)) { setError("Informe uma data válida."); return; }
+    setBusy(true); setError("");
+    try {
+      const response = await apiFetch("/finance/" + editing.id, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amountCents, category: cleanCategory, description: cleanDescription, transactionDate: editDate })
+      });
+      const payload = await response.json() as ApiPayload<unknown>;
+      if (!response.ok || !payload.ok) throw new Error(payload.error?.message ?? "Não foi possível atualizar o lançamento.");
+      setEditing(null);
+      await refresh();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Erro ao editar lançamento."); }
+    finally { setBusy(false); }
+  }
+
   function exportCsv() {
     const rows = [["Data","Tipo","Categoria","Descrição","Valor (R$)"], ...data.transactions.map(item => [item.transactionDate, item.type === "income" ? "Receita" : "Despesa", item.category, item.description, (item.amountCents / 100).toFixed(2).replace(".", ",")])];
     const csv = "\uFEFF" + rows.map(row => row.map(value => '"' + String(value).replace(/"/g, '""') + '"').join(";")).join("\r\n");
@@ -86,10 +147,11 @@ export default function FinancePanel() {
     </div>
     <div className="mt-4 grid gap-3 sm:grid-cols-2"><label className="text-sm text-[#705844]">De <input type="date" value={from} onChange={event => setFrom(event.target.value)} className="mt-1 w-full rounded-xl border border-[#dfcdbd] px-3 py-2"/></label><label className="text-sm text-[#705844]">Até <input type="date" value={to} onChange={event => setTo(event.target.value)} className="mt-1 w-full rounded-xl border border-[#dfcdbd] px-3 py-2"/></label></div>
     <div className="mt-5 grid gap-5 lg:grid-cols-2">
-      <form onSubmit={submitIncome} className="space-y-3 rounded-2xl bg-[#fbf6f0] p-4"><h3 className="font-semibold text-[#493629]">Registrar receita de atendimento</h3><p className="text-xs text-[#8c7767]">A reserva precisa estar aprovada e marcada como paga. O valor é informado manualmente.</p><select required value={bookingId} onChange={event => setBookingId(event.target.value)} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"><option value="">Selecione atendimento pago ainda não lançado</option>{eligibleBookings.map(booking => <option key={booking.id} value={booking.id}>{booking.bookingDate} · {booking.customerName} · {booking.service}</option>)}</select><input required inputMode="decimal" placeholder="Valor recebido (ex.: 85,00)" value={incomeAmount} onChange={event => setIncomeAmount(event.target.value)} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"/><button disabled={busy} className="rounded-full bg-[#6d8267] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Registrar receita</button></form>
-      <form onSubmit={submitExpense} className="space-y-3 rounded-2xl bg-[#fbf6f0] p-4"><h3 className="font-semibold text-[#493629]">Registrar despesa</h3><select value={category} onChange={event => setCategory(event.target.value)} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"><option>Materiais</option><option>Produtos</option><option>Aluguel</option><option>Contas</option><option>Equipamentos</option><option>Outros</option></select><input required maxLength={240} placeholder="Descrição da despesa" value={description} onChange={event => setDescription(event.target.value)} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"/><input required inputMode="decimal" placeholder="Valor (ex.: 120,00)" value={amount} onChange={event => setAmount(event.target.value)} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"/><button disabled={busy} className="rounded-full bg-[#705844] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Registrar despesa</button></form>
+      <form onSubmit={submitIncome} className="space-y-3 rounded-2xl bg-[#fbf6f0] p-4"><h3 className="font-semibold text-[#493629]">Registrar receita de atendimento</h3><p className="text-xs text-[#8c7767]">A reserva precisa estar aprovada e marcada como paga. O valor é informado manualmente.</p><select required value={bookingId} onChange={event => setBookingId(event.target.value)} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"><option value="">Selecione atendimento pago ainda não lançado</option>{eligibleBookings.map(booking => <option key={booking.id} value={booking.id}>{booking.bookingDate} · {booking.customerName} · {booking.service}</option>)}</select><input required type="text" inputMode="decimal" autoComplete="off" placeholder="Valor recebido (ex.: 85,00)" value={incomeAmount} onChange={event => setIncomeAmount(normalizeMoneyInput(event.target.value))} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"/><button disabled={busy} className="rounded-full bg-[#6d8267] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Registrar receita</button></form>
+      <form onSubmit={submitExpense} className="space-y-3 rounded-2xl bg-[#fbf6f0] p-4"><h3 className="font-semibold text-[#493629]">Registrar despesa</h3><select value={category} onChange={event => setCategory(event.target.value)} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"><option>Materiais</option><option>Produtos</option><option>Aluguel</option><option>Contas</option><option>Equipamentos</option><option>Outros</option></select><input required minLength={2} maxLength={240} type="text" autoComplete="off" placeholder="Descrição da despesa" value={description} onChange={event => setDescription(cleanTextInput(event.target.value))} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"/><input required type="text" inputMode="decimal" autoComplete="off" placeholder="Valor (ex.: 120,00)" value={amount} onChange={event => setAmount(normalizeMoneyInput(event.target.value))} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"/><button disabled={busy} className="rounded-full bg-[#705844] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">Registrar despesa</button></form>
     </div>
     {error && <p role="alert" className="mt-4 rounded-xl border border-[#e7b9ad] bg-[#fff1ed] px-4 py-3 text-sm text-[#914b40]">{error}</p>}
-    <div className="mt-5"><h3 className="mb-3 font-semibold text-[#493629]">Lançamentos recentes</h3><div className="space-y-2">{data.transactions.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#eaded3] px-4 py-3"><div><p className="text-sm font-medium text-[#493629]">{item.description}</p><p className="text-xs text-[#8c7767]">{item.transactionDate} · {item.category}</p></div><strong className={item.type === "income" ? "text-[#66816a]" : "text-[#9b594c]"}>{item.type === "income" ? "+" : "−"}{money(item.amountCents)}</strong></div>)}{data.transactions.length === 0 && <p className="rounded-xl bg-[#fbf6f0] px-4 py-5 text-sm text-[#8c7767]">Nenhum lançamento neste período.</p>}</div></div>
+    {editing && <form onSubmit={saveEdit} className="mt-5 space-y-3 rounded-2xl border border-[#d9c4b1] bg-[#fbf6f0] p-4"><div className="flex items-center justify-between gap-3"><h3 className="font-semibold text-[#493629]">Editar lançamento</h3><button type="button" onClick={() => setEditing(null)} className="text-sm text-[#8c7767]">Cancelar</button></div><p className="text-xs text-[#8c7767]">{editing.type === "income" ? "Receita" : "Despesa"} · Alterações registradas no histórico.</p><input required minLength={2} maxLength={240} value={editDescription} onChange={event => setEditDescription(cleanTextInput(event.target.value))} placeholder="Descrição" className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"/><input required minLength={2} maxLength={80} value={editCategory} onChange={event => setEditCategory(event.target.value)} placeholder="Categoria" className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"/><input required type="text" inputMode="decimal" value={editAmount} onChange={event => setEditAmount(normalizeMoneyInput(event.target.value))} placeholder="Valor (ex.: 120,00)" className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"/><input required type="date" value={editDate} onChange={event => setEditDate(event.target.value)} className="w-full rounded-xl border border-[#dfcdbd] bg-white px-3 py-2 text-sm"/><button disabled={busy} className="rounded-full bg-[#705844] px-5 py-2 text-sm font-semibold text-white disabled:opacity-50">Salvar alterações</button></form>}
+    <div className="mt-5"><h3 className="mb-3 font-semibold text-[#493629]">Lançamentos recentes</h3><div className="space-y-2">{data.transactions.map(item => <div key={item.id} className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#eaded3] px-4 py-3"><div><p className="text-sm font-medium text-[#493629]">{item.description}</p><p className="text-xs text-[#8c7767]">{item.transactionDate} · {item.category}</p></div><div className="flex items-center gap-3"><button type="button" onClick={() => startEdit(item)} className="text-sm font-semibold text-[#705844] underline">Editar</button><strong className={item.type === "income" ? "text-[#66816a]" : "text-[#9b594c]"}>{item.type === "income" ? "+" : "−"}{money(item.amountCents)}</strong></div></div>)}{data.transactions.length === 0 && <p className="rounded-xl bg-[#fbf6f0] px-4 py-5 text-sm text-[#8c7767]">Nenhum lançamento neste período.</p>}</div></div>
   </section>;
 }
