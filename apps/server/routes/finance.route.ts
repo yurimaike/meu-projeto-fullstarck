@@ -21,7 +21,7 @@ const editSchema = z.object({
   amountCents: z.number().int().positive().max(100_000_000),
   category: z.string().trim().min(2).max(80),
   description: z.string().trim().min(2).max(240),
-  transactionDate: z.string().regex(/^\\d{4}-\\d{2}-\\d{2}$/)
+  transactionDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/)
 });
 function fail(c: any, error: unknown) {
   if (error instanceof DatabaseError) return c.json(apiFailure(error.code, error.message), error.status as 400|403|404|409|502|503);
