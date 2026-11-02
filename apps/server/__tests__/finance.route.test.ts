@@ -6,6 +6,7 @@ import { applyMigrations, fetchWithAuth, resetDatabase, signUpAndGetToken } from
 beforeAll(async () => { await applyMigrations(); });
 beforeEach(async () => {
   await resetDatabase();
+  await executeSql("DELETE FROM finance_transaction_audit");
   await executeSql("DELETE FROM finance_transactions");
   await executeSql("DELETE FROM bookings");
 });
@@ -54,4 +55,41 @@ describe("admin finance route", () => {
     });
     expect(duplicate.status).toBe(409);
   });
+
+  it("allows admins to correct a saved expense and records an audit trail", async () => {
+    const admin = await createAdmin("finance-admin-edit@example.com");
+    const created = await fetchWithAuth(app, admin.token, "/api/finance/expenses", {
+      method: "POST",
+      body: JSON.stringify({ amountCents: 12000, category: "Materiais", description: "meso", transactionDate: "2026-11-01" })
+    });
+    expect(created.status).toBe(201);
+    const createdBody = await created.json() as { data: { id: string } };
+    const updated = await fetchWithAuth(app, admin.token, "/api/finance/" + createdBody.data.id, {
+      method: "PATCH",
+      body: JSON.stringify({ amountCents: 10000, category: "Materiais", description: "mesa", transactionDate: "2026-11-02" })
+    });
+    expect(updated.status).toBe(200);
+    const row = await executeSql("SELECT amountCents,description,transactionDate FROM finance_transactions WHERE id=?", [createdBody.data.id]);
+    expect(row.rows[0]).toMatchObject({ amountCents: 10000, description: "mesa", transactionDate: "2026-11-02" });
+    const audit = await executeSql("SELECT oldValues,newValues FROM finance_transaction_audit WHERE transactionId=?", [createdBody.data.id]);
+    expect(audit.rows).toHaveLength(1);
+    expect(JSON.parse(String(audit.rows[0].oldValues))).toMatchObject({ amountCents: 12000, description: "meso" });
+    expect(JSON.parse(String(audit.rows[0].newValues))).toMatchObject({ amountCents: 10000, description: "mesa" });
+  });
+
+  it("does not allow customers to edit finance transactions", async () => {
+    const admin = await createAdmin("finance-admin-edit-auth@example.com");
+    const customer = await signUpAndGetToken(app, { email: "finance-customer-edit@example.com" });
+    const created = await fetchWithAuth(app, admin.token, "/api/finance/expenses", {
+      method: "POST",
+      body: JSON.stringify({ amountCents: 5000, category: "Materiais", description: "Teste", transactionDate: "2026-11-01" })
+    });
+    const createdBody = await created.json() as { data: { id: string } };
+    const response = await fetchWithAuth(app, customer.token, "/api/finance/" + createdBody.data.id, {
+      method: "PATCH",
+      body: JSON.stringify({ amountCents: 5000, category: "Materiais", description: "Alterado", transactionDate: "2026-11-01" })
+    });
+    expect(response.status).toBe(403);
+  });
+
 });
