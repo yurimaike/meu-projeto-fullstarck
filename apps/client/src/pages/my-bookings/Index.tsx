@@ -4,6 +4,7 @@ import { apiFetch } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import SiteLayout from "@/site/SiteLayout";
 import { whatsappLink } from "@/site/siteData";
+import CustomerLoyalty from "@/components/customer/CustomerLoyalty";
 
 type CustomerBooking = {
   id: string;
