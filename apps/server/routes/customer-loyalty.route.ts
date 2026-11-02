@@ -24,10 +24,12 @@ customerLoyaltyRouter.get("/mine", protectedRoute, async (c) => {
       )
     ]);
 
+    const enabled = Boolean(settings.rows[0]?.enabled);
+
     return c.json(apiSuccess({
-      enabled: Boolean(settings.rows[0]?.enabled),
+      enabled,
       completedPaid: Number(progress.rows[0]?.completedPaid ?? 0),
-      bookingsUntilReward: Boolean(settings.rows[0]?.enabled)
+      bookingsUntilReward: enabled
         ? 8 - (Number(progress.rows[0]?.completedPaid ?? 0) % 8)
         : null,
       rewards: rewards.rows
